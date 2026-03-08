@@ -506,6 +506,40 @@ export function getMessages(channelId, { before, limit = 50 } = {}) {
 }
 
 /**
+ * Returns messages surrounding a given timestamp in a channel.
+ * @param {string} channelId
+ * @param {number} timestamp
+ * @param {number} [halfLimit=25]
+ * @returns {object[]}
+ */
+export function getMessagesAround(channelId, timestamp, halfLimit = 25) {
+  const before = db.prepare(
+    `SELECT * FROM messages WHERE channel_id = ? AND created_at <= ?
+     ORDER BY created_at DESC LIMIT ?`
+  ).all(channelId, timestamp, halfLimit);
+  const after = db.prepare(
+    `SELECT * FROM messages WHERE channel_id = ? AND created_at > ?
+     ORDER BY created_at ASC LIMIT ?`
+  ).all(channelId, timestamp, halfLimit);
+  const all = [...before.reverse(), ...after];
+  return all;
+}
+
+/**
+ * Searches messages in a channel by content substring.
+ * @param {string} channelId
+ * @param {string} query
+ * @param {{ limit?: number }} [options]
+ * @returns {object[]}
+ */
+export function searchMessages(channelId, query, { limit = 50 } = {}) {
+  return db.prepare(
+    `SELECT * FROM messages WHERE channel_id = ? AND content LIKE ?
+     ORDER BY created_at DESC LIMIT ?`
+  ).all(channelId, `%${query}%`, limit);
+}
+
+/**
  * Returns a map of channel IDs to their most recent message timestamp.
  * @returns {Map<string, number>}
  */

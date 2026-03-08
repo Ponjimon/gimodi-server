@@ -4,7 +4,7 @@ import logger from '../logger.js';
 import config from '../config.js';
 import { handleConnect, handleDisconnect } from './connection.js';
 import { handleJoinChannel, handleLeaveChannel, handleCreateChannel, handleDeleteChannel, handleUpdateChannel } from './channels.js';
-import { handleChatSend, handleChatHistory, handleChatDelete, handleChatEdit, handleRemovePreview, handleDmSend, handleDmHistory, handleServerChatSend, handleServerChatHistory, handleServerChatDelete, handleTypingIndicator, handleReact, handleUnreact, handlePinMessage, handleUnpinMessage, handleChatSubscribe, handleChatUnsubscribe, handleFileList, handleFileDelete } from './chat.js';
+import { handleChatSend, handleChatHistory, handleChatContext, handleChatDelete, handleChatEdit, handleRemovePreview, handleDmSend, handleDmHistory, handleServerChatSend, handleServerChatHistory, handleServerChatDelete, handleTypingIndicator, handleReact, handleUnreact, handlePinMessage, handleUnpinMessage, handleChatSubscribe, handleChatUnsubscribe, handleFileList, handleFileDelete, handleChatSearch } from './chat.js';
 import { handleChatCommand } from './commands.js';
 import { handleGetRtpCapabilities, handleRtpCapabilities, handleCreateTransport, handleConnectTransport, handleProduce, handleConsumerResume, handleMuteState, handleVoiceRequest, handleVoiceCancelRequest, handleGrantVoice, handleRevokeVoice } from './voice.js';
 import { handleScreenStart, handleScreenStop } from './screen.js';
@@ -130,6 +130,7 @@ async function routeMessage(client, type, data, id) {
 
       case 'chat:send':               return handleChatSend(client, data, id);
       case 'chat:history':            return handleChatHistory(client, data, id);
+      case 'chat:context':            return handleChatContext(client, data, id);
       case 'chat:delete':             return handleChatDelete(client, data, id);
       case 'chat:edit':               return handleChatEdit(client, data, id);
       case 'chat:remove-preview':     return handleRemovePreview(client, data, id);
@@ -144,6 +145,7 @@ async function routeMessage(client, type, data, id) {
       case 'chat:pin-message':        return handlePinMessage(client, data, id);
       case 'chat:unpin-message':      return handleUnpinMessage(client, data, id);
       case 'chat:command':            return handleChatCommand(client, data, id);
+      case 'chat:search':             return handleChatSearch(client, data, id);
       case 'chat:subscribe':          return handleChatSubscribe(client, data, id);
       case 'chat:unsubscribe':        return handleChatUnsubscribe(client, data);
 

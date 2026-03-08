@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 const MAX_MESSAGE_LENGTH = 4000;
 import state from '../state.js';
 import config from '../config.js';
-import { insertMessage, getMessages, getMessage, updateMessage, deleteMessage, updateMessagePreviews, clearMessagePreviews, insertDmMessage, getDmMessages, getUserBadge, insertServerMessage, getServerMessages, getServerMessage, deleteServerMessage, addReaction, removeReaction, getReactions, pinMessage, unpinMessage, getPinnedMessages, isMessagePinned, getUserRoles, getIdentity, getChannelFiles, getFile, deleteFile, getMessageByFileId } from '../db/database.js';
+import { insertMessage, getMessages, getMessagesAround, getMessage, updateMessage, deleteMessage, updateMessagePreviews, clearMessagePreviews, insertDmMessage, getDmMessages, getUserBadge, insertServerMessage, getServerMessages, getServerMessage, deleteServerMessage, addReaction, removeReaction, getReactions, pinMessage, unpinMessage, getPinnedMessages, isMessagePinned, getUserRoles, getIdentity, getChannelFiles, getFile, deleteFile, getMessageByFileId, searchMessages } from '../db/database.js';
 import { rmSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { send } from './handler.js';
@@ -383,6 +383,56 @@ export function handleChatHistory(client, data, msgId) {
   const pinnedMessageIds = pinnedRows.map(r => r.message_id);
 
   send(client.ws, 'chat:history-result', { channelId, messages, pinnedMessageIds }, msgId);
+}
+
+/**
+ * Returns messages surrounding a target timestamp for jump-to-message.
+ * @param {object} client
+ * @param {object} data
+ * @param {string} [msgId]
+ */
+export function handleChatContext(client, data, msgId) {
+  const { channelId, timestamp, password } = data;
+
+  if (!config.chat.persistMessages) {
+    return send(client.ws, 'chat:context-result', { channelId, messages: [] }, msgId);
+  }
+
+  const accessError = checkChannelChatAccess(client, channelId, password);
+  if (accessError) return send(client.ws, 'server:error', accessError, msgId);
+
+  const rows = getMessagesAround(channelId, timestamp, 25);
+
+  const badgeCache = new Map();
+  const messages = rows.map(r => {
+    const userId = r.user_id || null;
+    let badge;
+    if (userId) {
+      if (!badgeCache.has(userId)) {
+        badgeCache.set(userId, getUserBadge(userId) ?? null);
+      }
+      badge = badgeCache.get(userId) ?? null;
+    } else {
+      badge = r.badge || null;
+    }
+    return {
+      id: r.id,
+      channelId: r.channel_id,
+      clientId: r.client_id,
+      userId,
+      badge,
+      content: r.content,
+      timestamp: r.created_at,
+      replyTo: r.reply_to || undefined,
+      replyToNickname: r.reply_to_nickname || undefined,
+      replyToUserId: r.reply_to_user_id || undefined,
+      replyToContent: r.reply_to_content || undefined,
+      editedAt: r.edited_at || undefined,
+      linkPreviews: r.link_previews ? JSON.parse(r.link_previews) : undefined,
+    };
+  });
+
+  send(client.ws, 'chat:context-result', { channelId, messages }, msgId);
 }
 
 /**
@@ -1004,4 +1054,65 @@ export function handleFileDelete(client, data, msgId) {
   deleteFile(fileId);
 
   send(client.ws, 'file:delete-ok', { fileId }, msgId);
+}
+
+/**
+ * Handles searching messages in a channel.
+ * @param {object} client
+ * @param {object} data
+ * @param {string} [msgId]
+ */
+export function handleChatSearch(client, data, msgId) {
+  const { channelId, query, limit } = data;
+
+  if (!channelId || !state.channels.has(channelId)) {
+    return send(client.ws, 'server:error', { code: 'UNKNOWN_CHANNEL', message: 'Channel not found.' }, msgId);
+  }
+
+  if (!query || typeof query !== 'string' || query.trim().length < 3) {
+    return send(client.ws, 'server:error', { code: 'QUERY_TOO_SHORT', message: 'Search query must be at least 3 characters.' }, msgId);
+  }
+
+  if (!config.chat.persistMessages) {
+    return send(client.ws, 'chat:search-result', { channelId, query: query.trim(), messages: [] }, msgId);
+  }
+
+  const accessError = checkChannelChatAccess(client, channelId);
+  if (accessError) {
+    return send(client.ws, 'server:error', accessError, msgId);
+  }
+
+  const channel = state.channels.get(channelId);
+  if (channel && !hasChannelReadAccess(client, channel)) {
+    return send(client.ws, 'server:error', { code: 'READ_RESTRICTED', message: 'You do not have permission to read this channel.' }, msgId);
+  }
+
+  const rows = searchMessages(channelId, query.trim(), {
+    limit: Math.min(limit || 50, 100),
+  });
+
+  const badgeCache = new Map();
+  const messages = rows.map(r => {
+    const userId = r.user_id || null;
+    let badge;
+    if (userId) {
+      if (!badgeCache.has(userId)) {
+        badgeCache.set(userId, getUserBadge(userId) ?? null);
+      }
+      badge = badgeCache.get(userId) ?? null;
+    } else {
+      badge = r.badge || null;
+    }
+    return {
+      id: r.id,
+      channelId: r.channel_id,
+      clientId: r.client_id,
+      userId,
+      badge,
+      content: r.content,
+      timestamp: r.created_at,
+    };
+  });
+
+  send(client.ws, 'chat:search-result', { channelId, query: query.trim(), messages }, msgId);
 }
