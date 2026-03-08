@@ -1,8 +1,12 @@
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 import * as openpgp from 'openpgp';
 import logger from '../logger.js';
 import config from '../config.js';
 import supportedVersions from '../supportedVersions.js';
+
+const require = createRequire(import.meta.url);
+const { version: serverVersion } = require('../../package.json');
 import state from '../state.js';
 import { isBanned, isBannedByUserId, findIdentityByFingerprint, insertIdentity, getUserPermissions, getUserBadge, getUserRoles, assignRole, insertServerMessage, updateLastSeen } from '../db/database.js';
 import { broadcast, send } from './handler.js';
@@ -136,6 +140,7 @@ export async function handleConnect(ws, data, msgId, ip) {
     badge,
     permissions: [...permissions],
     serverName: config.name,
+    serverVersion,
     iconHash: config.icon?.hash || null,
     maxFileSize: config.files.maxFileSize,
     tempChannelDeleteDelay: config.chat.tempChannelDeleteDelay || 180,
