@@ -67,6 +67,7 @@ export function handleBan(client, data, id) {
   addBan({
     id: randomUUID(),
     ip: target.ip,
+    nickname: target.nickname,
     reason: banReason,
     createdAt: Date.now(),
     expiresAt,
@@ -286,6 +287,7 @@ export function handleBanByUserId(client, data, id) {
     id: randomUUID(),
     ip: null,
     userId,
+    nickname: identity.name,
     reason: banReason,
     createdAt: Date.now(),
     expiresAt,
@@ -296,6 +298,7 @@ export function handleBanByUserId(client, data, id) {
       addBan({
         id: randomUUID(),
         ip: c.ip,
+        nickname: c.nickname,
         reason: banReason,
         createdAt: Date.now(),
         expiresAt,

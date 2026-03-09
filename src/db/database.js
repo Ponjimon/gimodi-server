@@ -253,8 +253,8 @@ export function deleteBan(banId) {
  */
 export function addBan(ban) {
   db.prepare(
-    `INSERT INTO bans (id, ip, user_id, reason, created_at, expires_at)
-     VALUES (@id, @ip, @userId, @reason, @createdAt, @expiresAt)`
+    `INSERT INTO bans (id, ip, user_id, reason, created_at, expires_at, nickname)
+     VALUES (@id, @ip, @userId, @reason, @createdAt, @expiresAt, @nickname)`
   ).run({
     id: ban.id,
     ip: ban.ip ?? null,
@@ -262,6 +262,7 @@ export function addBan(ban) {
     reason: ban.reason ?? '',
     createdAt: ban.createdAt ?? Date.now(),
     expiresAt: ban.expiresAt ?? null,
+    nickname: ban.nickname ?? null,
   });
 }
 
