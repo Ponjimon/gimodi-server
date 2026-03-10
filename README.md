@@ -51,6 +51,7 @@ Settings are stored in the SQLite database (`data/gimodi.db` in the `server_conf
 | `GIMODI_ICON_HASH`                      | `icon.hash`                   | string  | `null`            | Server icon SHA-256 hash (managed automatically)                         |
 | `GIMODI_ICON_FILENAME`                  | `icon.filename`               | string  | `null`            | Server icon filename (managed automatically)                             |
 | `GIMODI_METRICS_ENABLED`                | `metrics.enabled`             | boolean | `false`           | Enable Prometheus metrics endpoint at `/metrics`                         |
+| `GIMODI_METRICS_ALLOWED_NETWORK`        | `metrics.allowedNetwork`      | string  | `0.0.0.0/0`      | CIDR range allowed to access `/metrics` (e.g. `10.24.0.0/16`)           |
 
 Boolean values accept `true`/`1` for true, anything else for false. Set to `null` or empty string to clear a value.
 

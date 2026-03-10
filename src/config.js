@@ -35,6 +35,7 @@ const defaults = {
   },
   metrics: {
     enabled: false,
+    allowedNetwork: '0.0.0.0/0',
   },
 };
 
@@ -62,6 +63,7 @@ const ENV_MAP = {
   GIMODI_ICON_HASH:                    { key: 'icon.hash', type: 'string' },
   GIMODI_ICON_FILENAME:               { key: 'icon.filename', type: 'string' },
   GIMODI_METRICS_ENABLED:             { key: 'metrics.enabled', type: 'boolean' },
+  GIMODI_METRICS_ALLOWED_NETWORK:     { key: 'metrics.allowedNetwork', type: 'string' },
 };
 
 /**

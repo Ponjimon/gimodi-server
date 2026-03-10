@@ -6,6 +6,7 @@
 const HIDDEN_SETTINGS = [
   'ssl.certPath',
   'ssl.keyPath',
+  'metrics.allowedNetwork',
 ];
 
 export default HIDDEN_SETTINGS;

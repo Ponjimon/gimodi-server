@@ -1,7 +1,37 @@
+import { isIP } from 'node:net';
 import state from './state.js';
 import config from './config.js';
 
 const startTime = Date.now();
+
+/**
+ * Parses an IPv4 address string into a 32-bit integer.
+ * @param {string} ip
+ * @returns {number}
+ */
+function ipToInt(ip) {
+  return ip.split('.').reduce((acc, octet) => (acc << 8) | parseInt(octet, 10), 0) >>> 0;
+}
+
+/**
+ * Checks whether an IP address falls within a CIDR range.
+ * @param {string} ip
+ * @param {string} cidr - CIDR notation (e.g. "10.24.0.0/16")
+ * @returns {boolean}
+ */
+export function isIpInCidr(ip, cidr) {
+  const normalized = ip.replace(/^::ffff:/, '');
+  if (isIP(normalized) !== 4) return cidr === '::/0';
+
+  const [network, prefixStr] = cidr.split('/');
+  if (isIP(network) !== 4) return false;
+
+  const prefix = parseInt(prefixStr, 10);
+  if (prefix === 0) return true;
+
+  const mask = (~0 << (32 - prefix)) >>> 0;
+  return (ipToInt(normalized) & mask) === (ipToInt(network) & mask);
+}
 
 const counters = {
   messagesTotal: 0,
@@ -37,6 +67,7 @@ export function collectMetrics() {
   let totalConsumers = 0;
   let screenShares = 0;
   let webcamStreams = 0;
+  let clientsInVoice = 0;
 
   for (const channel of state.channels.values()) {
     if (channel.clients.size > 0) activeChannels++;
@@ -44,6 +75,7 @@ export function collectMetrics() {
   }
 
   for (const client of state.clients.values()) {
+    if (client.sendTransport) clientsInVoice++;
     if (client.producers) {
       for (const producer of client.producers.values()) {
         totalProducers++;
@@ -67,6 +99,10 @@ export function collectMetrics() {
   lines.push('# HELP gimodi_clients_connected Current number of connected clients.');
   lines.push('# TYPE gimodi_clients_connected gauge');
   lines.push(`gimodi_clients_connected ${connectedClients}`);
+
+  lines.push('# HELP gimodi_clients_in_voice Clients currently in a voice session.');
+  lines.push('# TYPE gimodi_clients_in_voice gauge');
+  lines.push(`gimodi_clients_in_voice ${clientsInVoice}`);
 
   lines.push('# HELP gimodi_clients_max Maximum allowed concurrent clients.');
   lines.push('# TYPE gimodi_clients_max gauge');

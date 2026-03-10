@@ -12,7 +12,7 @@ import { loadOrGenerateCert } from './ssl.js';
 import { setCors } from './http/utils.js';
 import { handleFileUpload, handleFileDownload } from './http/files.js';
 import { handleIconUpload, handleIconDownload, handleIconDelete } from './http/icon.js';
-import { collectMetrics } from './metrics.js';
+import { collectMetrics, isIpInCidr } from './metrics.js';
 
 let httpServer = null;
 
@@ -64,6 +64,12 @@ async function main() {
     }
 
     if (req.url === '/metrics' && config.metrics.enabled) {
+      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
+      if (!isIpInCidr(ip, config.metrics.allowedNetwork)) {
+        res.writeHead(403);
+        res.end();
+        return;
+      }
       res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' });
       res.end(collectMetrics());
       return;
