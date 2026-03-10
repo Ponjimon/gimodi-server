@@ -155,6 +155,15 @@ export async function handleConnect(ws, data, msgId, ip) {
   ws._clientId = clientId;
   incrementCounter('connectionsTotal');
 
+  const voiceGrantedClients = [];
+  const voiceRequestClients = [];
+  for (const channel of state.channels.values()) {
+    if (channel.moderated) {
+      for (const cid of channel.voiceGranted) voiceGrantedClients.push(cid);
+      for (const cid of channel.voiceRequests) voiceRequestClients.push(cid);
+    }
+  }
+
   send(ws, 'server:welcome', {
     clientId,
     userId,
@@ -173,6 +182,8 @@ export async function handleConnect(ws, data, msgId, ip) {
     }),
     clients: state.getClientList(),
     hasAdmin: hasAdminUsers(),
+    voiceGrantedClients,
+    voiceRequestClients,
   }, msgId);
 
   broadcast('server:client-joined', {

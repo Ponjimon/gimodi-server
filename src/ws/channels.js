@@ -262,6 +262,7 @@ export async function handleJoinChannel(client, data, msgId) {
   if (channel.moderated) {
     joinData.moderated = true;
     joinData.voiceGranted = [...channel.voiceGranted];
+    joinData.voiceRequests = [...channel.voiceRequests];
   }
   if (!hasChannelReadAccess(client, channel)) {
     joinData.readRestricted = true;

@@ -194,11 +194,8 @@ export function handleVoiceRequest(client, data, id) {
     return send(client.ws, 'server:error', { code: 'NOT_MODERATED', message: 'Channel is not moderated.' }, id);
   }
   channel.voiceRequests.add(client.id);
-  for (const cid of channel.clients) {
-    const peer = state.clients.get(cid);
-    if (peer && peer.permissions.has(PERMISSIONS.VOICE_GRANT)) {
-      send(peer.ws, 'channel:voice-requested', { channelId: channel.id, clientId: client.id, nickname: client.nickname });
-    }
+  for (const peer of state.clients.values()) {
+    send(peer.ws, 'channel:voice-requested', { channelId: channel.id, clientId: client.id, nickname: client.nickname });
   }
   send(client.ws, 'voice:request-ok', {}, id);
 }
@@ -214,11 +211,8 @@ export function handleVoiceCancelRequest(client, data, id) {
     return send(client.ws, 'server:error', { code: 'NOT_MODERATED', message: 'Channel is not moderated.' }, id);
   }
   channel.voiceRequests.delete(client.id);
-  for (const cid of channel.clients) {
-    const peer = state.clients.get(cid);
-    if (peer && peer.permissions.has(PERMISSIONS.VOICE_GRANT)) {
-      send(peer.ws, 'channel:voice-request-cancelled', { channelId: channel.id, clientId: client.id });
-    }
+  for (const peer of state.clients.values()) {
+    send(peer.ws, 'channel:voice-request-cancelled', { channelId: channel.id, clientId: client.id });
   }
   send(client.ws, 'voice:cancel-request-ok', {}, id);
 }
@@ -243,11 +237,8 @@ export function handleGrantVoice(client, data, id) {
   }
   channel.voiceGranted.add(clientId);
   channel.voiceRequests.delete(clientId);
-  for (const cid of channel.clients) {
-    const peer = state.clients.get(cid);
-    if (peer) {
-      send(peer.ws, 'channel:voice-granted', { channelId: channel.id, clientId });
-    }
+  for (const peer of state.clients.values()) {
+    send(peer.ws, 'channel:voice-granted', { channelId: channel.id, clientId });
   }
   send(client.ws, 'admin:grant-voice-ok', { clientId }, id);
 }
@@ -277,11 +268,8 @@ export function handleRevokeVoice(client, data, id) {
       target.producers.delete(producerId);
     }
   }
-  for (const cid of channel.clients) {
-    const peer = state.clients.get(cid);
-    if (peer) {
-      send(peer.ws, 'channel:voice-revoked', { channelId: channel.id, clientId });
-    }
+  for (const peer of state.clients.values()) {
+    send(peer.ws, 'channel:voice-revoked', { channelId: channel.id, clientId });
   }
   send(client.ws, 'admin:revoke-voice-ok', { clientId }, id);
 }
