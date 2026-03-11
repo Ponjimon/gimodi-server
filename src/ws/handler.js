@@ -11,7 +11,7 @@ import { handleScreenStart, handleScreenStop } from './screen.js';
 import { handleWebcamStart, handleWebcamStop } from './webcam.js';
 import { handleTokenRedeem, handleTokenList, handleTokenCreate, handleTokenDelete } from './tokens.js';
 import { handleGetUserRoles, handleAssignRole, handleRemoveRole, handleAssignRoleByUserId, handleRemoveRoleByUserId, handleGetUserRolesByUserId, handleRoleList, handleRoleListPermissions, handleRoleCreate, handleRoleUpdate, handleRoleDelete, handleRoleSetPermissions, handleRoleGetMembers, handleRoleRemoveMember, handleRoleReorder } from './roles.js';
-import { handleKick, handleBan, handlePoke, handleListBans, handleRemoveBan, handleGetAuditLog, handleMoveUser, handleListUsers, handleDeleteUser, handleBulkDeleteUsers, handleBanByUserId, handleDeleteNickname, handleAddNickname } from './admin.js';
+import { handleKick, handleBan, handlePoke, handleListBans, handleRemoveBan, handleGetAuditLog, handleMoveUser, handleListUsers, handleDeleteUser, handleBulkDeleteUsers, handleBanByUserId, handleDeleteNickname, handleAddNickname, handleGetAnalytics } from './admin.js';
 import { handleGetUserInfo, handleGetPublicKey, handleGetNicknames } from './users.js';
 import { handleGetSettings, handleSetSettings } from './settings.js';
 import { incrementCounter } from '../metrics.js';
@@ -208,6 +208,7 @@ async function routeMessage(client, type, data, id) {
       case 'admin:ban-user':          return handleBanByUserId(client, data, id);
       case 'admin:delete-nickname':   return handleDeleteNickname(client, data, id);
       case 'admin:add-nickname':      return handleAddNickname(client, data, id);
+      case 'admin:get-analytics':    return handleGetAnalytics(client, data, id);
 
       case 'server:get-settings':     return handleGetSettings(client, data, id);
       case 'server:set-settings':     return handleSetSettings(client, data, id);

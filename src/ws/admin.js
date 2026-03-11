@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import state from '../state.js';
 import { PERMISSIONS } from '../permissions.js';
-import { addBan, getAllBans, deleteBan, logAuditEvent, getAuditLog, getIdentity, getAllIdentities, getUserRoles, getUserPermissions, getUserBadge, deleteIdentity, deleteUserRoles, deleteUserDmMessages, assignRole, removeRole, isBannedByUserId, getRegisteredNicknames, deleteNicknameRegistration, getNicknameOwner, registerNickname, getUserHighestRolePosition } from '../db/database.js';
+import { addBan, getAllBans, deleteBan, logAuditEvent, getAuditLog, getIdentity, getAllIdentities, getUserRoles, getUserPermissions, getUserBadge, deleteIdentity, deleteUserRoles, deleteUserDmMessages, assignRole, removeRole, isBannedByUserId, getRegisteredNicknames, deleteNicknameRegistration, getNicknameOwner, registerNickname, getUserHighestRolePosition, getAnalyticsData } from '../db/database.js';
+import { counters, startTime } from '../metrics.js';
 import { send, broadcast } from './handler.js';
 
 /**
@@ -414,4 +415,65 @@ export function handleAddNickname(client, data, id) {
   registerNickname(userId, trimmed);
   logAuditEvent('add_nickname', client.userId, client.nickname, userId, trimmed, null);
   send(client.ws, 'admin:add-nickname-ok', { userId, nickname: trimmed }, id);
+}
+
+/**
+ * Handles requesting server analytics data including live and historical metrics.
+ * @param {object} client
+ * @param {object} data
+ * @param {string} [id]
+ */
+export function handleGetAnalytics(client, data, id) {
+  if (!client.permissions.has(PERMISSIONS.SERVER_ADMIN_MENU)) {
+    return send(client.ws, 'server:error', { code: 'FORBIDDEN', message: 'Admin access required.' }, id);
+  }
+
+  const connectedClients = state.clients.size;
+  let clientsInVoice = 0;
+  let totalProducers = 0;
+  let totalConsumers = 0;
+  let screenShares = 0;
+  let webcamStreams = 0;
+  let voiceRooms = 0;
+  let activeChannels = 0;
+
+  for (const channel of state.channels.values()) {
+    if (channel.clients.size > 0) activeChannels++;
+    if (channel.router) voiceRooms++;
+  }
+
+  for (const c of state.clients.values()) {
+    if (c.sendTransport) clientsInVoice++;
+    if (c.producers) {
+      for (const producer of c.producers.values()) {
+        totalProducers++;
+        if (producer.appData?.screen || producer.appData?.screenAudio) screenShares++;
+        if (producer.appData?.webcam) webcamStreams++;
+      }
+    }
+    if (c.consumers) totalConsumers += c.consumers.size;
+  }
+
+  const uptimeMs = Date.now() - startTime;
+  const dbData = getAnalyticsData();
+
+  send(client.ws, 'admin:analytics', {
+    live: {
+      connectedClients,
+      clientsInVoice,
+      activeChannels,
+      voiceRooms,
+      totalProducers,
+      totalConsumers,
+      screenShares,
+      webcamStreams,
+      uptimeMs,
+      sessionsTotal: counters.connectionsTotal,
+      wsMessagesTotal: counters.websocketMessagesTotal,
+      sessionMessagesTotal: counters.messagesTotal,
+      sessionDmsTotal: counters.dmMessagesTotal,
+      sessionFilesTotal: counters.filesUploadedTotal,
+    },
+    db: dbData,
+  }, id);
 }

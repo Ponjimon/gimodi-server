@@ -2,7 +2,7 @@ import { isIP } from 'node:net';
 import state from './state.js';
 import config from './config.js';
 
-const startTime = Date.now();
+export const startTime = Date.now();
 
 /**
  * Parses an IPv4 address string into a 32-bit integer.
@@ -33,7 +33,7 @@ export function isIpInCidr(ip, cidr) {
   return (ipToInt(normalized) & mask) === (ipToInt(network) & mask);
 }
 
-const counters = {
+export const counters = {
   messagesTotal: 0,
   dmMessagesTotal: 0,
   filesUploadedTotal: 0,

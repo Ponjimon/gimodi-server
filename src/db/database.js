@@ -1375,4 +1375,75 @@ export function getAuditLog(limit = 100) {
   return db.prepare('SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ?').all(limit);
 }
 
+/**
+ * Returns analytics data aggregated from the database.
+ * @returns {object}
+ */
+export function getAnalyticsData() {
+  const now = Date.now();
+  const oneDayAgo = now - 86400000;
+  const sevenDaysAgo = now - 604800000;
+  const thirtyDaysAgo = now - 2592000000;
+
+  const totalMessages = db.prepare('SELECT COUNT(*) as c FROM messages').get().c;
+  const messagesToday = db.prepare('SELECT COUNT(*) as c FROM messages WHERE created_at > ?').get(oneDayAgo).c;
+  const messages7d = db.prepare('SELECT COUNT(*) as c FROM messages WHERE created_at > ?').get(sevenDaysAgo).c;
+  const messages30d = db.prepare('SELECT COUNT(*) as c FROM messages WHERE created_at > ?').get(thirtyDaysAgo).c;
+
+  const totalDms = db.prepare('SELECT COUNT(*) as c FROM dm_messages').get().c;
+
+  const totalFiles = db.prepare('SELECT COUNT(*) as c FROM files').get().c;
+  const fileStats = db.prepare('SELECT COALESCE(SUM(size), 0) as totalSize FROM files').get();
+
+  const totalIdentities = db.prepare('SELECT COUNT(*) as c FROM identities').get().c;
+  const activeIdentities7d = db.prepare('SELECT COUNT(*) as c FROM identities WHERE last_seen_at > ?').get(sevenDaysAgo).c;
+
+  const totalBans = db.prepare('SELECT COUNT(*) as c FROM bans').get().c;
+
+  const totalChannels = db.prepare('SELECT COUNT(*) as c FROM channels').get().c;
+
+  const totalReactions = db.prepare('SELECT COUNT(*) as c FROM reactions').get().c;
+
+  const totalPins = db.prepare('SELECT COUNT(*) as c FROM pinned_messages').get().c;
+
+  const totalAuditEvents = db.prepare('SELECT COUNT(*) as c FROM audit_log').get().c;
+
+  const messagesPerChannel = db.prepare(
+    `SELECT c.name, COUNT(m.id) as count
+     FROM channels c LEFT JOIN messages m ON m.channel_id = c.id
+     GROUP BY c.id ORDER BY count DESC LIMIT 10`
+  ).all();
+
+  const topUploaders = db.prepare(
+    `SELECT nickname, COUNT(*) as count, SUM(size) as totalSize
+     FROM files GROUP BY nickname ORDER BY totalSize DESC LIMIT 10`
+  ).all();
+
+  const messageActivity = db.prepare(
+    `SELECT (created_at / 3600000) * 3600000 as hour, COUNT(*) as count
+     FROM messages WHERE created_at > ? GROUP BY hour ORDER BY hour`
+  ).all(sevenDaysAgo);
+
+  const filesByType = db.prepare(
+    `SELECT mime_type, COUNT(*) as count, SUM(size) as totalSize
+     FROM files GROUP BY mime_type ORDER BY totalSize DESC LIMIT 10`
+  ).all();
+
+  const serverMessages = db.prepare('SELECT COUNT(*) as c FROM server_messages').get().c;
+
+  return {
+    messages: { total: totalMessages, today: messagesToday, last7d: messages7d, last30d: messages30d },
+    dms: { total: totalDms },
+    serverMessages,
+    files: { total: totalFiles, totalSize: fileStats.totalSize, byType: filesByType, topUploaders },
+    identities: { total: totalIdentities, active7d: activeIdentities7d },
+    bans: { total: totalBans },
+    channels: { total: totalChannels, messagesPerChannel },
+    reactions: { total: totalReactions },
+    pins: { total: totalPins },
+    auditEvents: { total: totalAuditEvents },
+    messageActivity,
+  };
+}
+
 export default db;
