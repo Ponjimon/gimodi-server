@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import state from '../state.js';
 import { PERMISSIONS } from '../permissions.js';
-import { addBan, getAllBans, deleteBan, logAuditEvent, getAuditLog, getIdentity, getAllIdentities, getUserRoles, getUserPermissions, getUserBadge, deleteIdentity, deleteUserRoles, deleteUserDmMessages, assignRole, removeRole, isBannedByUserId, getRegisteredNicknames, deleteNicknameRegistration, getUserHighestRolePosition } from '../db/database.js';
+import { addBan, getAllBans, deleteBan, logAuditEvent, getAuditLog, getIdentity, getAllIdentities, getUserRoles, getUserPermissions, getUserBadge, deleteIdentity, deleteUserRoles, deleteUserDmMessages, assignRole, removeRole, isBannedByUserId, getRegisteredNicknames, deleteNicknameRegistration, getNicknameOwner, registerNickname, getUserHighestRolePosition } from '../db/database.js';
 import { send, broadcast } from './handler.js';
 
 /**
@@ -380,4 +380,38 @@ export function handleDeleteNickname(client, data, id) {
 
   logAuditEvent('delete_nickname', client.userId, client.nickname, userId, nickname, null);
   send(client.ws, 'admin:delete-nickname-ok', { userId, nickname }, id);
+}
+
+/**
+ * Adds a nickname registration for a user identity.
+ * @param {object} client
+ * @param {object} data
+ * @param {string} [id]
+ */
+export function handleAddNickname(client, data, id) {
+  if (!client.permissions.has(PERMISSIONS.USER_BAN)) {
+    return send(client.ws, 'server:error', { code: 'FORBIDDEN', message: 'Admin access required.' }, id);
+  }
+  const { userId, nickname } = data;
+  if (!userId || typeof userId !== 'string' || !nickname || typeof nickname !== 'string') {
+    return send(client.ws, 'server:error', { code: 'INVALID_REQUEST', message: 'userId and nickname are required.' }, id);
+  }
+
+  const trimmed = nickname.trim();
+  if (!trimmed || trimmed.length > 32) {
+    return send(client.ws, 'server:error', { code: 'INVALID_REQUEST', message: 'Nickname must be between 1 and 32 characters.' }, id);
+  }
+
+  if (!actorOutranksTarget(client, userId)) {
+    return send(client.ws, 'server:error', { code: 'FORBIDDEN', message: 'You cannot manage a user with equal or higher rank.' }, id);
+  }
+
+  const existingOwner = getNicknameOwner(trimmed);
+  if (existingOwner) {
+    return send(client.ws, 'server:error', { code: 'NICKNAME_TAKEN', message: `The nickname "${trimmed}" is already registered to another user.` }, id);
+  }
+
+  registerNickname(userId, trimmed);
+  logAuditEvent('add_nickname', client.userId, client.nickname, userId, trimmed, null);
+  send(client.ws, 'admin:add-nickname-ok', { userId, nickname: trimmed }, id);
 }
