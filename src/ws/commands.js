@@ -3,11 +3,13 @@ import config from '../config.js';
 import { send } from './handler.js';
 import { PERMISSIONS } from '../permissions.js';
 import { deleteChannelMessages, deleteMessagesByUser, getNicknameOwner } from '../db/database.js';
+import { startTime } from '../metrics.js';
 
 /** @type {Record<string, function>} */
 const COMMANDS = {
   clear: handleClear,
   purge: handlePurge,
+  uptime: handleUptime,
 };
 
 /**
@@ -122,4 +124,19 @@ function handlePurge(client, data, msgId) {
   for (const peer of state.clients.values()) {
     send(peer.ws, 'chat:purged', { clientId: targetClientId, userId: targetUserId });
   }
+}
+
+/**
+ * Responds with server uptime information.
+ * @param {object} client
+ * @param {object} data
+ * @param {string} [msgId]
+ */
+function handleUptime(client, data, msgId) {
+  if (!client.permissions.has(PERMISSIONS.CHAT_SLASH_UPTIME)) {
+    return send(client.ws, 'server:error', { code: 'FORBIDDEN', message: 'You do not have permission to use /uptime.' }, msgId);
+  }
+
+  const uptimeMs = Date.now() - startTime;
+  send(client.ws, 'chat:uptime', { uptimeMs, startedAt: startTime }, msgId);
 }
