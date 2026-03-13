@@ -1,6 +1,5 @@
 import {
   getAllChannels,
-  getDefaultChannel,
   getAllChannelAllowedRoles,
   getAllChannelWriteRoles,
   getAllChannelReadRoles,

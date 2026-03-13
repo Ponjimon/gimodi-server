@@ -19,7 +19,7 @@ const COMMANDS = {
  * @param {string} [msgId]
  */
 export function handleChatCommand(client, data, msgId) {
-  const { name, channelId } = data;
+  const { name } = data;
 
   if (!name || typeof name !== 'string') {
     return send(client.ws, 'server:error', { code: 'INVALID_COMMAND', message: 'Command name required.' }, msgId);

@@ -68,21 +68,6 @@ const ENV_MAP = {
 
 /**
  * @param {object} obj
- * @param {string} path - Dot-separated path (e.g. "media.listenIp")
- * @returns {*}
- */
-function getNestedValue(obj, path) {
-  const parts = path.split('.');
-  let current = obj;
-  for (const part of parts) {
-    if (current == null || typeof current !== 'object') return undefined;
-    current = current[part];
-  }
-  return current;
-}
-
-/**
- * @param {object} obj
  * @param {string} path - Dot-separated path
  * @param {*} value
  */
@@ -90,7 +75,7 @@ function setNestedValue(obj, path, value) {
   const parts = path.split('.');
   let current = obj;
   for (let i = 0; i < parts.length - 1; i++) {
-    if (current[parts[i]] == null || typeof current[parts[i]] !== 'object') {
+    if (current[parts[i]] === null || current[parts[i]] === undefined || typeof current[parts[i]] !== 'object') {
       current[parts[i]] = {};
     }
     current = current[parts[i]];

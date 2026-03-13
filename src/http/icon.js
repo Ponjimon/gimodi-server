@@ -27,7 +27,7 @@ function deleteExistingIcon() {
   if (config.icon.filename) {
     try {
       unlinkSync(join(dataDir, config.icon.filename));
-    } catch {}
+    } catch { /* file may not exist */ }
   }
 }
 

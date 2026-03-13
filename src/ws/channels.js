@@ -15,7 +15,7 @@ import {
   getChannelFileIds,
 } from '../db/database.js';
 import { send, broadcast } from './handler.js';
-import { ensureRouter, cleanupClientMedia, maybeCloseRouter, createConsumersForProducer, consumeExistingProducers } from '../media/room.js';
+import { cleanupClientMedia, maybeCloseRouter } from '../media/room.js';
 import { PERMISSIONS } from '../permissions.js';
 import config from '../config.js';
 import logger from '../logger.js';
@@ -30,7 +30,7 @@ function deleteChannelFiles(channelId) {
   for (const fileId of fileIds) {
     try {
       rmSync(join(uploadsDir, fileId), { recursive: true, force: true });
-    } catch {}
+    } catch { /* file cleanup is best-effort */ }
   }
 }
 

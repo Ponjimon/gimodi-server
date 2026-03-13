@@ -10,14 +10,9 @@ import {
   getIdentity,
   getAllIdentities,
   getUserRoles,
-  getUserPermissions,
-  getUserBadge,
   deleteIdentity,
   deleteUserRoles,
   deleteUserDmMessages,
-  assignRole,
-  removeRole,
-  isBannedByUserId,
   getRegisteredNicknames,
   deleteNicknameRegistration,
   getNicknameOwner,
@@ -26,7 +21,7 @@ import {
   getAnalyticsData,
 } from '../db/database.js';
 import { counters, startTime } from '../metrics.js';
-import { send, broadcast } from './handler.js';
+import { send } from './handler.js';
 
 /**
  * Checks whether the actor outranks the target in the role hierarchy.

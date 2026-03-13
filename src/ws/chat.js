@@ -626,11 +626,11 @@ export function handleChatDelete(client, data, msgId) {
         const uploadsDir = resolve(config.files.storagePath);
         try {
           rmSync(join(uploadsDir, parsed.fileId), { recursive: true, force: true });
-        } catch {}
+        } catch { /* file cleanup is best-effort */ }
         deleteFile(parsed.fileId);
       }
     }
-  } catch {}
+  } catch { /* content may not be JSON */ }
 
   deleteMessage(messageId);
 
@@ -753,7 +753,7 @@ export function handleChatEdit(client, data, msgId) {
  * @param {object} data
  * @param {string} [msgId]
  */
-export function handleTypingIndicator(client, data, msgId) {
+export function handleTypingIndicator(client, data, _msgId) {
   const { channelId } = data;
 
   if (!channelId) return;
@@ -1117,7 +1117,7 @@ export function handleFileDelete(client, data, msgId) {
   const uploadsDir = resolve(config.files.storagePath);
   try {
     rmSync(join(uploadsDir, fileId), { recursive: true, force: true });
-  } catch {}
+  } catch { /* file cleanup is best-effort */ }
 
   deleteFile(fileId);
 

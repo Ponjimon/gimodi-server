@@ -137,7 +137,7 @@ export function handleFileUpload(req, res) {
  * @param {string} fileId
  * @param {string} filename
  */
-export function handleFileDownload(req, res, fileId, filename) {
+export function handleFileDownload(req, res, fileId, _filename) {
   const fileRecord = getFile(fileId);
   if (!fileRecord) {
     res.writeHead(404, { 'Content-Type': 'application/json' });

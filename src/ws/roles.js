@@ -347,7 +347,7 @@ export function handleRoleCreate(client, data, id) {
   const position = getNextRolePosition();
   try {
     createRole({ id: roleId, name: name.trim(), badge: badge || null, color: color || null, position });
-  } catch (err) {
+  } catch {
     return send(client.ws, 'server:error', { code: 'DUPLICATE_NAME', message: 'A role with that name already exists.' }, id);
   }
   send(client.ws, 'role:created', { id: roleId, name: name.trim(), badge: badge || null, color: color || null, position, permissions: [] }, id);

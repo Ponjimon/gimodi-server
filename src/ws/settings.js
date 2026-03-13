@@ -14,10 +14,10 @@ function stripHiddenKeys(obj) {
     const parts = key.split('.');
     let target = obj;
     for (let i = 0; i < parts.length - 1; i++) {
-      if (target == null || typeof target !== 'object') break;
+      if (target === null || target === undefined || typeof target !== 'object') break;
       target = target[parts[i]];
     }
-    if (target != null && typeof target === 'object') {
+    if (target !== null && target !== undefined && typeof target === 'object') {
       delete target[parts[parts.length - 1]];
     }
   }

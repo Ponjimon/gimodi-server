@@ -161,7 +161,7 @@ export async function handleConsumerResume(client, data, id) {
  * @param {object} data
  * @param {string} [id]
  */
-export function handleMuteState(client, data, id) {
+export function handleMuteState(client, data, _id) {
   const { muted, deafened } = data;
   client.muted = !!muted;
   client.deafened = !!deafened;

@@ -72,11 +72,11 @@ try {
 try {
   db.prepare('SELECT nickname FROM messages LIMIT 0').get();
   db.exec('ALTER TABLE messages DROP COLUMN nickname');
-} catch {}
+} catch { /* column already removed */ }
 try {
   db.prepare('SELECT from_nickname FROM dm_messages LIMIT 0').get();
   db.exec('ALTER TABLE dm_messages DROP COLUMN from_nickname');
-} catch {}
+} catch { /* column already removed */ }
 try {
   db.prepare('SELECT moderated FROM channels LIMIT 0').get();
 } catch {

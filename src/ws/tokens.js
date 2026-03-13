@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import state from '../state.js';
 import logger from '../logger.js';
 import { PERMISSIONS } from '../permissions.js';
 import {
