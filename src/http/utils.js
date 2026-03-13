@@ -4,7 +4,7 @@
 export function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Channel-Id, X-Client-Id, X-Filename');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Channel-Id, X-Client-Id, X-Client-Token, X-Filename');
   res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
 }
 

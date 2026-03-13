@@ -9,7 +9,7 @@ npm install        # Requires python3, make, g++ for mediasoup native build
 npm start          # Starts the server
 ```
 
-On first start, an admin token is printed to the console. Use it in the client to get admin rights.
+On first start, a bootstrap admin token is written to `data/bootstrap-admin-token.txt` with file mode `0600`. Use it in the client to get admin rights and then store or delete the file securely.
 
 ## Requirements
 
@@ -54,6 +54,8 @@ Settings are stored in the SQLite database (`data/gimodi.db` in the `server_conf
 | `GIMODI_METRICS_ALLOWED_NETWORK`        | string  | `0.0.0.0/0`       | CIDR range allowed to access `/metrics` (e.g. `10.24.0.0/16`)            |
 
 Boolean values accept `true`/`1` for true, anything else for false. Set to `null` or empty string to clear a value.
+
+When `GIMODI_GENERATE_ADMIN_TOKEN=true`, the temporary startup token is written to `data/startup-admin-token.txt` instead of being logged to stdout.
 
 ### Docker
 

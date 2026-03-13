@@ -20,6 +20,7 @@ import logger from './logger.js';
  * @property {boolean} muted
  * @property {boolean} deafened
  * @property {string|null} badge
+ * @property {string} httpAuthToken
  * @property {Set<string>} permissions
  * @property {Set<string>} chatSubscriptions
  */

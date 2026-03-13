@@ -15,6 +15,7 @@ import { handleKick, handleBan, handlePoke, handleListBans, handleRemoveBan, han
 import { handleGetUserInfo, handleGetPublicKey, handleGetNicknames } from './users.js';
 import { handleGetSettings, handleSetSettings } from './settings.js';
 import { incrementCounter } from '../metrics.js';
+import { getRequestIp } from '../security.js';
 
 let wss;
 
@@ -38,7 +39,7 @@ export function initWebSocket(server) {
   }, HEARTBEAT_INTERVAL);
 
   wss.on('connection', (ws, req) => {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
+    const ip = getRequestIp(req);
     ws._ip = ip;
 
     const maxPerIp = config.maxConnectionsPerIp;
