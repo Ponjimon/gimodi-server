@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import * as openpgp from 'openpgp';
 import logger from '../logger.js';
@@ -114,6 +114,7 @@ export async function handleConnect(ws, data, msgId, ip) {
   }
 
   const clientId = randomUUID();
+  const httpAuthToken = randomBytes(32).toString('hex');
 
   if (userId) {
     const roles = getUserRoles(userId);
@@ -149,6 +150,7 @@ export async function handleConnect(ws, data, msgId, ip) {
     muted: false,
     deafened: false,
     badge,
+    httpAuthToken,
     roleColor,
     rolePosition,
     permissions,
@@ -172,6 +174,7 @@ export async function handleConnect(ws, data, msgId, ip) {
     clientId,
     userId,
     badge,
+    httpAuthToken,
     roleColor,
     permissions: [...permissions],
     serverName: config.name,

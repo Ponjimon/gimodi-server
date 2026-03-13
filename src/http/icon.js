@@ -1,31 +1,21 @@
 import { createReadStream, mkdirSync, writeFileSync, unlinkSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { resolve, join } from 'node:path';
+import { resolve } from 'node:path';
 import config, { updateConfig } from '../config.js';
-import state from '../state.js';
 import { broadcast } from '../ws/handler.js';
 import { getMimeType } from './utils.js';
+import { getAuthenticatedClient, resolvePathInBase } from '../security.js';
 
 const dataDir = resolve('data');
-
-/**
- * @param {import('node:http').IncomingMessage} req
- * @returns {object|null} The client with manage_settings permission, or null
- */
-function getIconClient(req) {
-  const clientId = req.headers['x-client-id'];
-  if (!clientId) return null;
-  const client = state.clients.get(clientId);
-  if (!client || !client.permissions.has('server.manage_settings')) return null;
-  return client;
-}
 
 /**
  * Deletes the current server icon file from disk.
  */
 function deleteExistingIcon() {
   if (config.icon.filename) {
-    try { unlinkSync(join(dataDir, config.icon.filename)); } catch {}
+    const filePath = resolvePathInBase(dataDir, config.icon.filename);
+    if (!filePath) return;
+    try { unlinkSync(filePath); } catch {}
   }
 }
 
@@ -42,7 +32,7 @@ function saveIconConfig() {
  * @param {import('node:http').ServerResponse} res
  */
 export function handleIconUpload(req, res) {
-  const client = getIconClient(req);
+  const client = getAuthenticatedClient(req, 'server.manage_settings');
   if (!client) {
     res.writeHead(403, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Forbidden' }));
@@ -72,7 +62,13 @@ export function handleIconUpload(req, res) {
 
     const filename = `server-icon.${ext}`;
     mkdirSync(dataDir, { recursive: true });
-    writeFileSync(join(dataDir, filename), buffer);
+    const iconPath = resolvePathInBase(dataDir, filename);
+    if (!iconPath) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid icon path' }));
+      return;
+    }
+    writeFileSync(iconPath, buffer);
 
     config.icon.hash = hash;
     config.icon.filename = filename;
@@ -108,7 +104,12 @@ export function handleIconDownload(req, res) {
     return;
   }
 
-  const filePath = join(dataDir, config.icon.filename);
+  const filePath = resolvePathInBase(dataDir, config.icon.filename);
+  if (!filePath) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Icon file missing' }));
+    return;
+  }
   try { statSync(filePath); } catch {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Icon file missing' }));
@@ -128,7 +129,7 @@ export function handleIconDownload(req, res) {
  * @param {import('node:http').ServerResponse} res
  */
 export function handleIconDelete(req, res) {
-  const client = getIconClient(req);
+  const client = getAuthenticatedClient(req, 'server.manage_settings');
   if (!client) {
     res.writeHead(403, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Forbidden' }));

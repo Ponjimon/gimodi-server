@@ -1,9 +1,30 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import state from '../state.js';
 import logger from '../logger.js';
 import { PERMISSIONS } from '../permissions.js';
 import { getAdminToken, redeemAdminToken, getUserPermissions, getUserBadge, getUserRoles, assignRole, removeRole, listAdminTokens, insertAdminToken, deleteAdminToken, deleteExpiredTokens, getRoles, logAuditEvent } from '../db/database.js';
 import { send, broadcast } from './handler.js';
+
+function getTokenId(token) {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+function serializeAdminToken(record) {
+  return {
+    token: getTokenId(record.token),
+    tokenPreview: `${record.token.slice(0, 6)}...${record.token.slice(-4)}`,
+    role: record.role,
+    created_at: record.created_at,
+    redeemed_at: record.redeemed_at,
+    expires_at: record.expires_at,
+  };
+}
+
+function resolveListedToken(tokenOrId) {
+  if (!tokenOrId || typeof tokenOrId !== 'string') return null;
+  if (getAdminToken(tokenOrId)) return tokenOrId;
+  return listAdminTokens().find(record => getTokenId(record.token) === tokenOrId)?.token || null;
+}
 
 /**
  * @param {object} client
@@ -54,7 +75,7 @@ export function handleTokenList(client, data, id) {
   if (!client.permissions.has(PERMISSIONS.TOKEN_LIST)) {
     return send(client.ws, 'server:error', { code: 'FORBIDDEN', message: 'Admin access required.' }, id);
   }
-  const tokens = listAdminTokens();
+  const tokens = listAdminTokens().map(serializeAdminToken);
   send(client.ws, 'token:list-result', { tokens }, id);
 }
 
@@ -97,8 +118,12 @@ export function handleTokenDelete(client, data, id) {
   if (!token) {
     return send(client.ws, 'server:error', { code: 'INVALID_TOKEN', message: 'Token is required.' }, id);
   }
-  deleteAdminToken(token);
-  send(client.ws, 'token:deleted', { token }, id);
+  const resolvedToken = resolveListedToken(token);
+  if (!resolvedToken) {
+    return send(client.ws, 'server:error', { code: 'INVALID_TOKEN', message: 'Token not found.' }, id);
+  }
+  deleteAdminToken(resolvedToken);
+  send(client.ws, 'token:deleted', { token: getTokenId(resolvedToken) }, id);
 
   logAuditEvent('token_delete', client.userId, client.nickname, null, null, null);
 }

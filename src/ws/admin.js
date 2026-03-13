@@ -19,6 +19,20 @@ function actorOutranksTarget(actor, targetUserId) {
 }
 
 /**
+ * @param {object} actor
+ * @param {object} channel
+ * @returns {boolean}
+ */
+function actorHasChannelRoleAccess(actor, channel) {
+  if (!channel.allowedRoles || channel.allowedRoles.length === 0) return true;
+  if (actor.permissions.has(PERMISSIONS.CHANNEL_BYPASS_ROLE_RESTRICTION)) return true;
+  if (!actor.userId) return false;
+
+  const userRoles = getUserRoles(actor.userId);
+  return userRoles.some(role => channel.allowedRoles.includes(role.id));
+}
+
+/**
  * @param {object} client
  * @param {object} data
  * @param {string} [id]
@@ -172,12 +186,26 @@ export async function handleMoveUser(client, data, id) {
   if (!channel) {
     return send(client.ws, 'server:error', { code: 'UNKNOWN_CHANNEL', message: 'Channel not found.' }, id);
   }
+  if (channel.password && !client.permissions.has(PERMISSIONS.CHANNEL_BYPASS_PASSWORD)) {
+    return send(client.ws, 'server:error', { code: 'FORBIDDEN', message: 'You cannot move users into password-protected channels.' }, id);
+  }
+  if (!client.permissions.has(PERMISSIONS.CHANNEL_BYPASS_VISIBILITY_RESTRICTION)) {
+    const { hasChannelVisibility } = await import('./channels.js');
+    if (!hasChannelVisibility(client, channel)) {
+      return send(client.ws, 'server:error', { code: 'FORBIDDEN', message: 'You cannot move users into hidden channels.' }, id);
+    }
+  }
+  for (let current = channel; current; current = current.parentId ? state.channels.get(current.parentId) : null) {
+    if (!actorHasChannelRoleAccess(client, current)) {
+      return send(client.ws, 'server:error', { code: 'FORBIDDEN', message: 'You cannot move users into role-restricted channels.' }, id);
+    }
+  }
   if (target.channelId === channelId) {
     return send(client.ws, 'admin:move-user-ok', { clientId, channelId }, id);
   }
 
   const { handleJoinChannel } = await import('./channels.js');
-  handleJoinChannel(target, { channelId, password: channel.password, _bypassRoleCheck: true }, null);
+  handleJoinChannel(target, { channelId }, null, { bypassRoleCheck: true, bypassPassword: true });
   send(client.ws, 'admin:move-user-ok', { clientId, channelId }, id);
 }
 

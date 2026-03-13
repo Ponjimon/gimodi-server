@@ -7,6 +7,7 @@ import { insertFile, getFile, insertMessage } from '../db/database.js';
 import { send } from '../ws/handler.js';
 import { contentDisposition, getMimeType } from './utils.js';
 import { incrementCounter } from '../metrics.js';
+import { getAuthenticatedClient, getHeaderValue, resolvePathInBase } from '../security.js';
 
 const uploadsDir = resolve(config.files.storagePath);
 mkdirSync(uploadsDir, { recursive: true });
@@ -16,18 +17,18 @@ mkdirSync(uploadsDir, { recursive: true });
  * @param {import('node:http').ServerResponse} res
  */
 export function handleFileUpload(req, res) {
-  const channelId = req.headers['x-channel-id'];
-  const clientId = req.headers['x-client-id'];
-  const filename = req.headers['x-filename'];
+  const channelId = getHeaderValue(req.headers['x-channel-id']);
+  const filename = getHeaderValue(req.headers['x-filename']);
+  const client = getAuthenticatedClient(req);
 
-  if (!channelId || !clientId || !filename) {
+  if (!channelId || !client || !filename) {
     res.writeHead(400, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Missing required headers: X-Channel-Id, X-Client-Id, X-Filename' }));
+    res.end(JSON.stringify({ error: 'Missing or invalid headers: X-Channel-Id, X-Client-Id, X-Client-Token, X-Filename' }));
     return;
   }
 
-  const client = state.clients.get(clientId);
-  if (!client || client.channelId !== channelId) {
+  const clientId = client.id;
+  if (client.channelId !== channelId) {
     res.writeHead(403, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Client not found or not in channel' }));
     return;
@@ -40,11 +41,32 @@ export function handleFileUpload(req, res) {
     return;
   }
 
+  const safeName = filename
+    .trim()
+    .replace(/[\x00-\x1F\x7F]/g, '')
+    .replace(/[/\\]/g, '_')
+    .replace(/\.\./g, '_')
+    .slice(0, 255);
+  if (!safeName) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Invalid filename' }));
+    return;
+  }
+
   const fileId = randomUUID();
-  const safeName = filename.replace(/[/\\]/g, '_').replace(/\.\./g, '_');
-  const fileDir = join(uploadsDir, fileId);
+  const fileDir = resolvePathInBase(uploadsDir, fileId);
+  if (!fileDir) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Invalid upload path' }));
+    return;
+  }
   mkdirSync(fileDir, { recursive: true });
-  const filePath = join(fileDir, safeName);
+  const filePath = resolvePathInBase(fileDir, safeName);
+  if (!filePath) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Invalid filename' }));
+    return;
+  }
 
   let size = 0;
   const ws = createWriteStream(filePath);
@@ -145,7 +167,12 @@ export function handleFileDownload(req, res, fileId, filename) {
     return;
   }
 
-  const filePath = join(uploadsDir, fileId, fileRecord.filename);
+  const filePath = resolvePathInBase(join(uploadsDir, fileId), fileRecord.filename);
+  if (!filePath) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'File not found' }));
+    return;
+  }
   try {
     statSync(filePath);
   } catch {

@@ -140,8 +140,9 @@ export function handleLeaveChannel(client, data, msgId) {
  * @param {object} data
  * @param {string} [msgId]
  */
-export async function handleJoinChannel(client, data, msgId) {
+export async function handleJoinChannel(client, data, msgId, options = {}) {
   const { channelId, password } = data;
+  const { bypassRoleCheck = false, bypassPassword = false } = options;
 
   const channel = state.channels.get(channelId);
   if (!channel) {
@@ -156,7 +157,7 @@ export async function handleJoinChannel(client, data, msgId) {
     return send(client.ws, 'server:error', { code: 'CANNOT_JOIN_PLACEHOLDER', message: 'Cannot join a placeholder.' }, msgId);
   }
 
-  if (channel.password && password !== channel.password && !client.permissions.has(PERMISSIONS.CHANNEL_BYPASS_PASSWORD)) {
+  if (channel.password && !bypassPassword && password !== channel.password && !client.permissions.has(PERMISSIONS.CHANNEL_BYPASS_PASSWORD)) {
     return send(client.ws, 'server:error', { code: 'BAD_PASSWORD', message: 'Incorrect channel password.' }, msgId);
   }
 
@@ -164,11 +165,11 @@ export async function handleJoinChannel(client, data, msgId) {
     return send(client.ws, 'server:error', { code: 'CHANNEL_FULL', message: 'Channel is full.' }, msgId);
   }
 
-  if (!data._bypassRoleCheck && !hasChannelVisibility(client, channel)) {
+  if (!bypassRoleCheck && !hasChannelVisibility(client, channel)) {
     return send(client.ws, 'server:error', { code: 'CHANNEL_HIDDEN', message: 'Channel not found.' }, msgId);
   }
 
-  if (channel.allowedRoles && channel.allowedRoles.length > 0 && !data._bypassRoleCheck && !client.permissions.has(PERMISSIONS.CHANNEL_BYPASS_ROLE_RESTRICTION)) {
+  if (channel.allowedRoles && channel.allowedRoles.length > 0 && !bypassRoleCheck && !client.permissions.has(PERMISSIONS.CHANNEL_BYPASS_ROLE_RESTRICTION)) {
     let hasRole = false;
     if (client.userId) {
       const userRoles = getUserRoles(client.userId);
@@ -179,7 +180,7 @@ export async function handleJoinChannel(client, data, msgId) {
     }
   }
 
-  if (channel.parentId && !data._bypassRoleCheck && !client.permissions.has(PERMISSIONS.CHANNEL_BYPASS_ROLE_RESTRICTION)) {
+  if (channel.parentId && !bypassRoleCheck && !client.permissions.has(PERMISSIONS.CHANNEL_BYPASS_ROLE_RESTRICTION)) {
     const parent = state.channels.get(channel.parentId);
     if (parent && parent.allowedRoles && parent.allowedRoles.length > 0) {
       let hasRole = false;
