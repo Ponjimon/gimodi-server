@@ -12,6 +12,23 @@ import { getAuthenticatedClient, getHeaderValue, resolvePathInBase } from '../se
 const uploadsDir = resolve(config.files.storagePath);
 mkdirSync(uploadsDir, { recursive: true });
 
+function sanitizeFilename(filename) {
+  if (typeof filename !== 'string') return '';
+
+  let normalized = filename.trim();
+  try {
+    normalized = decodeURIComponent(normalized);
+  } catch {
+    return '';
+  }
+
+  return normalized
+    .replace(/[\x00-\x1F\x7F]/g, '')
+    .replace(/[/\\]/g, '_')
+    .replace(/\.\./g, '_')
+    .slice(0, 255);
+}
+
 /**
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
@@ -41,12 +58,7 @@ export function handleFileUpload(req, res) {
     return;
   }
 
-  const safeName = filename
-    .trim()
-    .replace(/[\x00-\x1F\x7F]/g, '')
-    .replace(/[/\\]/g, '_')
-    .replace(/\.\./g, '_')
-    .slice(0, 255);
+  const safeName = sanitizeFilename(filename);
   if (!safeName) {
     res.writeHead(400, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Invalid filename' }));
@@ -167,7 +179,21 @@ export function handleFileDownload(req, res, fileId, filename) {
     return;
   }
 
-  const filePath = resolvePathInBase(join(uploadsDir, fileId), fileRecord.filename);
+  const safeStoredName = sanitizeFilename(fileRecord.filename);
+  if (!safeStoredName || safeStoredName !== fileRecord.filename) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'File not found' }));
+    return;
+  }
+
+  const fileDir = resolvePathInBase(uploadsDir, fileId);
+  if (!fileDir) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'File not found' }));
+    return;
+  }
+
+  const filePath = resolvePathInBase(fileDir, safeStoredName);
   if (!filePath) {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'File not found' }));

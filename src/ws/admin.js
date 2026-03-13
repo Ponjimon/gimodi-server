@@ -195,8 +195,8 @@ export async function handleMoveUser(client, data, id) {
       return send(client.ws, 'server:error', { code: 'FORBIDDEN', message: 'You cannot move users into hidden channels.' }, id);
     }
   }
-  for (let current = channel; current; current = current.parentId ? state.channels.get(current.parentId) : null) {
-    if (!actorHasChannelRoleAccess(client, current)) {
+  for (let currentChannel = channel; currentChannel; currentChannel = currentChannel.parentId ? state.channels.get(currentChannel.parentId) : null) {
+    if (!actorHasChannelRoleAccess(client, currentChannel)) {
       return send(client.ws, 'server:error', { code: 'FORBIDDEN', message: 'You cannot move users into role-restricted channels.' }, id);
     }
   }
