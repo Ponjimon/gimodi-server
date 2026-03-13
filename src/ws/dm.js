@@ -90,7 +90,9 @@ export function handleDmSend(client, data, msgId) {
   send(client.ws, 'dm:sent', { id }, msgId);
 
   for (const p of conv.participants) {
-    if (p.fingerprint === client.fingerprint) continue;
+    if (p.fingerprint === client.fingerprint) {
+      continue;
+    }
     const recipients = findClientsByFingerprint(p.fingerprint);
     for (const recipient of recipients) {
       send(recipient.ws, 'dm:receive', {
@@ -114,7 +116,9 @@ export function handleDmSend(client, data, msgId) {
  * @param {string} msgId
  */
 export function handleDmAck(client, data, msgId) {
-  if (!client.fingerprint) return;
+  if (!client.fingerprint) {
+    return;
+  }
 
   const { id, senderFingerprint } = data;
 
@@ -164,7 +168,9 @@ export function handleDmHistory(client, data, msgId) {
  * @param {object} client
  */
 export function deliverPendingDms(client) {
-  if (!client.fingerprint) return;
+  if (!client.fingerprint) {
+    return;
+  }
 
   const pending = getPendingDmMessages(client.fingerprint);
   for (const msg of pending) {

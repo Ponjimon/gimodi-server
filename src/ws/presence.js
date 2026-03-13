@@ -1,6 +1,5 @@
 import state from '../state.js';
 import { send } from './handler.js';
-import { getIdentity } from '../db/database.js';
 
 /**
  * Handles a client subscribing to presence updates for a set of fingerprints.
@@ -44,7 +43,7 @@ export function handlePresenceSubscribe(client, data, msgId) {
  * @param {object} data
  * @param {string} [msgId]
  */
-export function handlePresenceUnsubscribe(client, data, msgId) {
+export function handlePresenceUnsubscribe(client, data, _msgId) {
   const { fingerprints } = data;
 
   if (!state.presenceSubscriptions) {

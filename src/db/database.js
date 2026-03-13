@@ -1609,7 +1609,9 @@ export function removeConversationParticipant(conversationId, fingerprint) {
  */
 export function getConversation(conversationId) {
   const conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversationId);
-  if (!conversation) return null;
+  if (!conversation) {
+    return null;
+  }
   const participants = db.prepare('SELECT * FROM conversation_participants WHERE conversation_id = ?').all(conversationId);
   return { conversation, participants };
 }
@@ -1635,9 +1637,7 @@ export function getConversationsForUser(fingerprint) {
  * @param {string} encryptedKey
  */
 export function updateSessionKey(conversationId, fingerprint, encryptedKey) {
-  db.prepare(
-    'UPDATE conversation_participants SET encrypted_session_key = ? WHERE conversation_id = ? AND fingerprint = ?',
-  ).run(encryptedKey, conversationId, fingerprint);
+  db.prepare('UPDATE conversation_participants SET encrypted_session_key = ? WHERE conversation_id = ? AND fingerprint = ?').run(encryptedKey, conversationId, fingerprint);
 }
 
 /**
@@ -1646,9 +1646,7 @@ export function updateSessionKey(conversationId, fingerprint, encryptedKey) {
  * @param {Record<string, string>} keysMap - fingerprint → encryptedKey
  */
 export function updateAllSessionKeys(conversationId, keysMap) {
-  const stmt = db.prepare(
-    'UPDATE conversation_participants SET encrypted_session_key = ? WHERE conversation_id = ? AND fingerprint = ?',
-  );
+  const stmt = db.prepare('UPDATE conversation_participants SET encrypted_session_key = ? WHERE conversation_id = ? AND fingerprint = ?');
   const run = db.transaction(() => {
     for (const [fingerprint, encryptedKey] of Object.entries(keysMap)) {
       stmt.run(encryptedKey, conversationId, fingerprint);
@@ -1685,12 +1683,14 @@ export function isConversationParticipant(conversationId, fingerprint) {
  * @returns {string|null} - The conversation ID, or null
  */
 export function findDirectConversation(fpA, fpB) {
-  const row = db.prepare(
-    `SELECT cp1.conversation_id FROM conversation_participants cp1
+  const row = db
+    .prepare(
+      `SELECT cp1.conversation_id FROM conversation_participants cp1
      JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
      JOIN conversations c ON c.id = cp1.conversation_id
      WHERE cp1.fingerprint = ? AND cp2.fingerprint = ? AND c.type = 'direct'`,
-  ).get(fpA, fpB);
+    )
+    .get(fpA, fpB);
   return row ? row.conversation_id : null;
 }
 
@@ -1722,12 +1722,14 @@ export function markDmDelivered(id, deliveredAt) {
  * @returns {Array<object>}
  */
 export function getPendingDmMessages(fingerprint) {
-  return db.prepare(
-    `SELECT m.* FROM dm_messages m
+  return db
+    .prepare(
+      `SELECT m.* FROM dm_messages m
      JOIN conversation_participants cp ON cp.conversation_id = m.conversation_id AND cp.fingerprint = ?
      WHERE m.sender_fingerprint != ? AND m.delivered_at IS NULL
      ORDER BY m.created_at ASC`,
-  ).all(fingerprint, fingerprint);
+    )
+    .all(fingerprint, fingerprint);
 }
 
 /**
@@ -1738,13 +1740,9 @@ export function getPendingDmMessages(fingerprint) {
  */
 export function getConversationMessages(conversationId, { before, limit = 50 } = {}) {
   if (before) {
-    return db.prepare(
-      `SELECT * FROM dm_messages WHERE conversation_id = ? AND created_at < ? ORDER BY created_at DESC LIMIT ?`,
-    ).all(conversationId, before, limit);
+    return db.prepare(`SELECT * FROM dm_messages WHERE conversation_id = ? AND created_at < ? ORDER BY created_at DESC LIMIT ?`).all(conversationId, before, limit);
   }
-  return db.prepare(
-    `SELECT * FROM dm_messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?`,
-  ).all(conversationId, limit);
+  return db.prepare(`SELECT * FROM dm_messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?`).all(conversationId, limit);
 }
 
 /**
@@ -1754,12 +1752,14 @@ export function getConversationMessages(conversationId, { before, limit = 50 } =
  * @returns {Array<{ conversation: object, participants: Array<object>, encryptedSessionKey: string|null }>}
  */
 export function getPendingConversationInvites(fingerprint) {
-  const rows = db.prepare(
-    `SELECT cp.conversation_id, cp.encrypted_session_key
+  const rows = db
+    .prepare(
+      `SELECT cp.conversation_id, cp.encrypted_session_key
      FROM conversation_participants cp
      JOIN conversations c ON c.id = cp.conversation_id
      WHERE cp.fingerprint = ?`,
-  ).all(fingerprint);
+    )
+    .all(fingerprint);
 
   return rows.map((row) => {
     const conv = getConversation(row.conversation_id);
@@ -1804,12 +1804,14 @@ export function getFriendRequest(id) {
  * @returns {object|undefined}
  */
 export function getPendingRequestBetween(fpA, fpB) {
-  return db.prepare(
-    `SELECT * FROM friend_requests
+  return db
+    .prepare(
+      `SELECT * FROM friend_requests
      WHERE status = 'pending'
        AND ((sender_fingerprint = ? AND recipient_fingerprint = ?)
          OR (sender_fingerprint = ? AND recipient_fingerprint = ?))`,
-  ).get(fpA, fpB, fpB, fpA);
+    )
+    .get(fpA, fpB, fpB, fpA);
 }
 
 /**
@@ -1818,9 +1820,7 @@ export function getPendingRequestBetween(fpA, fpB) {
  * @returns {object[]}
  */
 export function getPendingFriendRequests(recipientFingerprint) {
-  return db.prepare(
-    `SELECT * FROM friend_requests WHERE recipient_fingerprint = ? AND status = 'pending' ORDER BY created_at ASC`,
-  ).all(recipientFingerprint);
+  return db.prepare(`SELECT * FROM friend_requests WHERE recipient_fingerprint = ? AND status = 'pending' ORDER BY created_at ASC`).all(recipientFingerprint);
 }
 
 /**
@@ -1829,9 +1829,7 @@ export function getPendingFriendRequests(recipientFingerprint) {
  * @returns {object[]}
  */
 export function getUnnotifiedAcceptedRequests(senderFingerprint) {
-  return db.prepare(
-    `SELECT * FROM friend_requests WHERE sender_fingerprint = ? AND status = 'accepted' ORDER BY resolved_at ASC`,
-  ).all(senderFingerprint);
+  return db.prepare(`SELECT * FROM friend_requests WHERE sender_fingerprint = ? AND status = 'accepted' ORDER BY resolved_at ASC`).all(senderFingerprint);
 }
 
 /**
@@ -1857,7 +1855,7 @@ export function deleteFriendRequest(id) {
  */
 export function purgeAllDmAndFriendData() {
   const dmResult = db.prepare('DELETE FROM dm_messages').run();
-  const cpResult = db.prepare('DELETE FROM conversation_participants').run();
+  db.prepare('DELETE FROM conversation_participants').run();
   const convResult = db.prepare('DELETE FROM conversations').run();
   const frResult = db.prepare('DELETE FROM friend_requests').run();
   return { conversationCount: convResult.changes, dmCount: dmResult.changes, friendRequestCount: frResult.changes };

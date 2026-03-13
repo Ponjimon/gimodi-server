@@ -105,13 +105,18 @@ function acceptRequest(request, acceptor, msgId) {
   const acceptorIdentity = findIdentityByFingerprint(acceptor.fingerprint);
   const acceptorPublicKey = acceptorIdentity?.public_key || null;
 
-  send(acceptor.ws, 'friend:accept', {
-    success: true,
-    requestId: request.id,
-    friendFingerprint: request.sender_fingerprint,
-    friendNickname: request.sender_nickname,
-    friendPublicKey: request.sender_public_key,
-  }, msgId);
+  send(
+    acceptor.ws,
+    'friend:accept',
+    {
+      success: true,
+      requestId: request.id,
+      friendFingerprint: request.sender_fingerprint,
+      friendNickname: request.sender_nickname,
+      friendPublicKey: request.sender_public_key,
+    },
+    msgId,
+  );
 
   const sender = findClientByFingerprint(request.sender_fingerprint);
   if (sender) {

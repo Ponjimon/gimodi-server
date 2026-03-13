@@ -248,18 +248,20 @@ class ServerState {
    * @returns {object[]}
    */
   getClientList() {
-    return [...this.clients.values()].filter((c) => !c.observe).map((c) => ({
-      id: c.id,
-      userId: c.userId || null,
-      nickname: c.nickname,
-      channelId: c.channelId,
-      badge: c.badge || null,
-      roleColor: c.roleColor || null,
-      rolePosition: c.rolePosition ?? Infinity,
-      muted: !!c.muted,
-      deafened: !!c.deafened,
-      fingerprint: c.fingerprint || null,
-    }));
+    return [...this.clients.values()]
+      .filter((c) => !c.observe)
+      .map((c) => ({
+        id: c.id,
+        userId: c.userId || null,
+        nickname: c.nickname,
+        channelId: c.channelId,
+        badge: c.badge || null,
+        roleColor: c.roleColor || null,
+        rolePosition: c.rolePosition ?? Infinity,
+        muted: !!c.muted,
+        deafened: !!c.deafened,
+        fingerprint: c.fingerprint || null,
+      }));
   }
 }
 

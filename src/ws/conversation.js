@@ -104,7 +104,7 @@ export function handleConversationCreate(client, data, msgId) {
 
   createConversation({
     id: convId,
-    name: isGroup ? (name || null) : null,
+    name: isGroup ? name || null : null,
     type,
     creatorFingerprint: client.fingerprint,
     createdAt: now,
@@ -117,23 +117,30 @@ export function handleConversationCreate(client, data, msgId) {
 
   const participantInfo = resolveParticipantInfo(allParticipants);
 
-  send(client.ws, 'conversation:created', {
-    id: convId,
-    name: isGroup ? (name || null) : null,
-    type,
-    participants: participantInfo,
-    creatorFingerprint: client.fingerprint,
-    createdAt: now,
-    encryptedSessionKey: isGroup ? (encryptedKeys?.[client.fingerprint] ?? null) : null,
-  }, msgId);
+  send(
+    client.ws,
+    'conversation:created',
+    {
+      id: convId,
+      name: isGroup ? name || null : null,
+      type,
+      participants: participantInfo,
+      creatorFingerprint: client.fingerprint,
+      createdAt: now,
+      encryptedSessionKey: isGroup ? (encryptedKeys?.[client.fingerprint] ?? null) : null,
+    },
+    msgId,
+  );
 
   for (const fp of participants) {
-    if (fp === client.fingerprint) continue;
+    if (fp === client.fingerprint) {
+      continue;
+    }
     const clients = findClientsByFingerprint(fp);
     for (const c of clients) {
       send(c.ws, 'conversation:invite', {
         conversationId: convId,
-        name: isGroup ? (name || null) : null,
+        name: isGroup ? name || null : null,
         type,
         creatorFingerprint: client.fingerprint,
         participants: participantInfo,
@@ -149,17 +156,25 @@ export function handleConversationCreate(client, data, msgId) {
  * @param {object} data
  * @param {string} msgId
  */
-export function handleConversationJoined(client, data, msgId) {
-  if (!client.fingerprint) return;
+export function handleConversationJoined(client, data, _msgId) {
+  if (!client.fingerprint) {
+    return;
+  }
 
   const { conversationId } = data;
   const conv = getConversation(conversationId);
-  if (!conv) return;
+  if (!conv) {
+    return;
+  }
 
-  if (!isConversationParticipant(conversationId, client.fingerprint)) return;
+  if (!isConversationParticipant(conversationId, client.fingerprint)) {
+    return;
+  }
 
   for (const p of conv.participants) {
-    if (p.fingerprint === client.fingerprint) continue;
+    if (p.fingerprint === client.fingerprint) {
+      continue;
+    }
     const clients = findClientsByFingerprint(p.fingerprint);
     for (const c of clients) {
       send(c.ws, 'conversation:participant-joined', {
@@ -178,13 +193,19 @@ export function handleConversationJoined(client, data, msgId) {
  * @param {string} msgId
  */
 export function handleConversationLeave(client, data, msgId) {
-  if (!client.fingerprint) return;
+  if (!client.fingerprint) {
+    return;
+  }
 
   const { conversationId } = data;
   const conv = getConversation(conversationId);
-  if (!conv) return;
+  if (!conv) {
+    return;
+  }
 
-  if (!isConversationParticipant(conversationId, client.fingerprint)) return;
+  if (!isConversationParticipant(conversationId, client.fingerprint)) {
+    return;
+  }
 
   if (conv.conversation.type === 'direct') {
     return send(client.ws, 'server:error', { code: 'CANNOT_LEAVE', message: 'Cannot leave a direct conversation.' }, msgId);
@@ -193,7 +214,9 @@ export function handleConversationLeave(client, data, msgId) {
   removeConversationParticipant(conversationId, client.fingerprint);
 
   for (const p of conv.participants) {
-    if (p.fingerprint === client.fingerprint) continue;
+    if (p.fingerprint === client.fingerprint) {
+      continue;
+    }
     const clients = findClientsByFingerprint(p.fingerprint);
     for (const c of clients) {
       send(c.ws, 'conversation:participant-left', {
@@ -211,7 +234,9 @@ export function handleConversationLeave(client, data, msgId) {
  * @param {string} msgId
  */
 export function handleConversationRemoveParticipant(client, data, msgId) {
-  if (!client.fingerprint) return;
+  if (!client.fingerprint) {
+    return;
+  }
 
   const { conversationId, fingerprint } = data;
   const conv = getConversation(conversationId);
@@ -280,7 +305,9 @@ export function handleConversationList(client, data, msgId) {
  * @param {string} msgId
  */
 export function handleConversationKeyUpdate(client, data, msgId) {
-  if (!client.fingerprint) return;
+  if (!client.fingerprint) {
+    return;
+  }
 
   const { conversationId, encryptedKeys, keyIndex } = data;
   const conv = getConversation(conversationId);
@@ -299,9 +326,13 @@ export function handleConversationKeyUpdate(client, data, msgId) {
   updateAllSessionKeys(conversationId, encryptedKeys);
 
   for (const p of conv.participants) {
-    if (p.fingerprint === client.fingerprint) continue;
+    if (p.fingerprint === client.fingerprint) {
+      continue;
+    }
     const encryptedKey = encryptedKeys[p.fingerprint];
-    if (!encryptedKey) continue;
+    if (!encryptedKey) {
+      continue;
+    }
     const clients = findClientsByFingerprint(p.fingerprint);
     for (const c of clients) {
       send(c.ws, 'conversation:key-update', {
@@ -320,7 +351,9 @@ export function handleConversationKeyUpdate(client, data, msgId) {
  * @param {string} msgId
  */
 export function handleConversationAddParticipant(client, data, msgId) {
-  if (!client.fingerprint) return;
+  if (!client.fingerprint) {
+    return;
+  }
 
   const { conversationId, fingerprint, encryptedKey } = data;
   const conv = getConversation(conversationId);
@@ -380,7 +413,9 @@ export function handleConversationAddParticipant(client, data, msgId) {
  * @param {object} client
  */
 export function deliverPendingConversationInvites(client) {
-  if (!client.fingerprint) return;
+  if (!client.fingerprint) {
+    return;
+  }
 
   const convs = getConversationsForUser(client.fingerprint);
   for (const { conversation, participants } of convs) {
