@@ -76,12 +76,6 @@ try {
   /* column already removed */
 }
 try {
-  db.prepare('SELECT from_nickname FROM dm_messages LIMIT 0').get();
-  db.exec('ALTER TABLE dm_messages DROP COLUMN from_nickname');
-} catch {
-  /* column already removed */
-}
-try {
   db.prepare('SELECT moderated FROM channels LIMIT 0').get();
 } catch {
   db.exec('ALTER TABLE channels ADD COLUMN moderated INTEGER NOT NULL DEFAULT 0');
@@ -370,23 +364,6 @@ export function isBannedByUserId(userId) {
 }
 
 /**
- * Inserts a direct message.
- * @param {object} msg
- */
-export function insertDmMessage(msg) {
-  db.prepare(
-    `INSERT INTO dm_messages (id, from_user_id, to_user_id, content, created_at)
-     VALUES (@id, @fromUserId, @toUserId, @content, @createdAt)`,
-  ).run({
-    id: msg.id,
-    fromUserId: msg.fromUserId,
-    toUserId: msg.toUserId,
-    content: msg.content,
-    createdAt: msg.createdAt,
-  });
-}
-
-/**
  * Returns the nickname for a user ID from the identities table.
  * @param {string} userId
  * @returns {string|null}
@@ -394,28 +371,6 @@ export function insertDmMessage(msg) {
 export function getNicknameByUserId(userId) {
   const row = db.prepare('SELECT name FROM identities WHERE user_id = ?').get(userId);
   return row ? row.name : null;
-}
-
-/**
- * Returns direct messages between two users with optional pagination.
- * @param {string} userIdA
- * @param {string} userIdB
- * @param {object} [options]
- * @param {number} [options.before]
- * @param {number} [options.limit]
- * @returns {object[]}
- */
-export function getDmMessages(userIdA, userIdB, { before, limit = 50 } = {}) {
-  const q = `
-    SELECT * FROM dm_messages
-    WHERE (from_user_id = ? AND to_user_id = ?)
-       OR (from_user_id = ? AND to_user_id = ?)
-    ${before ? 'AND created_at < ?' : ''}
-    ORDER BY created_at DESC
-    LIMIT ?
-  `;
-  const params = before ? [userIdA, userIdB, userIdB, userIdA, before, limit] : [userIdA, userIdB, userIdB, userIdA, limit];
-  return db.prepare(q).all(...params);
 }
 
 /**
@@ -527,14 +482,6 @@ export function deleteNicknameRegistration(userId, nickname) {
  */
 export function deleteUserRoles(userId) {
   db.prepare('DELETE FROM user_roles WHERE user_id = ?').run(userId);
-}
-
-/**
- * Deletes all direct messages sent to or from a user.
- * @param {string} userId
- */
-export function deleteUserDmMessages(userId) {
-  db.prepare('DELETE FROM dm_messages WHERE from_user_id = ? OR to_user_id = ?').run(userId, userId);
 }
 
 /**
@@ -1558,8 +1505,6 @@ export function getAnalyticsData() {
   const messages7d = db.prepare('SELECT COUNT(*) as c FROM messages WHERE created_at > ?').get(sevenDaysAgo).c;
   const messages30d = db.prepare('SELECT COUNT(*) as c FROM messages WHERE created_at > ?').get(thirtyDaysAgo).c;
 
-  const totalDms = db.prepare('SELECT COUNT(*) as c FROM dm_messages').get().c;
-
   const totalFiles = db.prepare('SELECT COUNT(*) as c FROM files').get().c;
   const fileStats = db.prepare('SELECT COALESCE(SUM(size), 0) as totalSize FROM files').get();
 
@@ -1609,7 +1554,6 @@ export function getAnalyticsData() {
 
   return {
     messages: { total: totalMessages, today: messagesToday, last7d: messages7d, last30d: messages30d },
-    dms: { total: totalDms },
     serverMessages,
     files: { total: totalFiles, totalSize: fileStats.totalSize, byType: filesByType, topUploaders },
     identities: { total: totalIdentities, active7d: activeIdentities7d },
@@ -1620,6 +1564,303 @@ export function getAnalyticsData() {
     auditEvents: { total: totalAuditEvents },
     messageActivity,
   };
+}
+
+// ── Conversations ──────────────────────────────────────────────────────────
+
+/**
+ * Creates a new conversation.
+ * @param {{ id: string, name?: string|null, type: string, creatorFingerprint: string, createdAt: number }} conv
+ */
+export function createConversation(conv) {
+  db.prepare(
+    `INSERT INTO conversations (id, name, type, creator_fingerprint, created_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run(conv.id, conv.name ?? null, conv.type, conv.creatorFingerprint, conv.createdAt);
+}
+
+/**
+ * Adds a participant to a conversation.
+ * @param {string} conversationId
+ * @param {string} fingerprint
+ * @param {string|null} encryptedSessionKey
+ * @param {number} joinedAt
+ */
+export function addConversationParticipant(conversationId, fingerprint, encryptedSessionKey, joinedAt) {
+  db.prepare(
+    `INSERT OR IGNORE INTO conversation_participants (conversation_id, fingerprint, encrypted_session_key, joined_at)
+     VALUES (?, ?, ?, ?)`,
+  ).run(conversationId, fingerprint, encryptedSessionKey, joinedAt);
+}
+
+/**
+ * Removes a participant from a conversation.
+ * @param {string} conversationId
+ * @param {string} fingerprint
+ */
+export function removeConversationParticipant(conversationId, fingerprint) {
+  db.prepare('DELETE FROM conversation_participants WHERE conversation_id = ? AND fingerprint = ?').run(conversationId, fingerprint);
+}
+
+/**
+ * Returns a conversation with its participants.
+ * @param {string} conversationId
+ * @returns {{ conversation: object, participants: Array<object> }|null}
+ */
+export function getConversation(conversationId) {
+  const conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversationId);
+  if (!conversation) return null;
+  const participants = db.prepare('SELECT * FROM conversation_participants WHERE conversation_id = ?').all(conversationId);
+  return { conversation, participants };
+}
+
+/**
+ * Returns all conversations a user is part of, with participants.
+ * @param {string} fingerprint
+ * @returns {Array<{ conversation: object, participants: Array<object> }>}
+ */
+export function getConversationsForUser(fingerprint) {
+  const convIds = db
+    .prepare('SELECT conversation_id FROM conversation_participants WHERE fingerprint = ?')
+    .all(fingerprint)
+    .map((r) => r.conversation_id);
+
+  return convIds.map((convId) => getConversation(convId)).filter(Boolean);
+}
+
+/**
+ * Updates the encrypted session key for a single participant.
+ * @param {string} conversationId
+ * @param {string} fingerprint
+ * @param {string} encryptedKey
+ */
+export function updateSessionKey(conversationId, fingerprint, encryptedKey) {
+  db.prepare(
+    'UPDATE conversation_participants SET encrypted_session_key = ? WHERE conversation_id = ? AND fingerprint = ?',
+  ).run(encryptedKey, conversationId, fingerprint);
+}
+
+/**
+ * Bulk-updates encrypted session keys for all participants in a conversation.
+ * @param {string} conversationId
+ * @param {Record<string, string>} keysMap - fingerprint → encryptedKey
+ */
+export function updateAllSessionKeys(conversationId, keysMap) {
+  const stmt = db.prepare(
+    'UPDATE conversation_participants SET encrypted_session_key = ? WHERE conversation_id = ? AND fingerprint = ?',
+  );
+  const run = db.transaction(() => {
+    for (const [fingerprint, encryptedKey] of Object.entries(keysMap)) {
+      stmt.run(encryptedKey, conversationId, fingerprint);
+    }
+  });
+  run();
+}
+
+/**
+ * Returns the participant count for a conversation.
+ * @param {string} conversationId
+ * @returns {number}
+ */
+export function getConversationParticipantCount(conversationId) {
+  const row = db.prepare('SELECT COUNT(*) as count FROM conversation_participants WHERE conversation_id = ?').get(conversationId);
+  return row.count;
+}
+
+/**
+ * Checks whether a fingerprint is a participant in a conversation.
+ * @param {string} conversationId
+ * @param {string} fingerprint
+ * @returns {boolean}
+ */
+export function isConversationParticipant(conversationId, fingerprint) {
+  const row = db.prepare('SELECT 1 FROM conversation_participants WHERE conversation_id = ? AND fingerprint = ?').get(conversationId, fingerprint);
+  return !!row;
+}
+
+/**
+ * Finds an existing direct (1:1) conversation between exactly two fingerprints.
+ * @param {string} fpA
+ * @param {string} fpB
+ * @returns {string|null} - The conversation ID, or null
+ */
+export function findDirectConversation(fpA, fpB) {
+  const row = db.prepare(
+    `SELECT cp1.conversation_id FROM conversation_participants cp1
+     JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
+     JOIN conversations c ON c.id = cp1.conversation_id
+     WHERE cp1.fingerprint = ? AND cp2.fingerprint = ? AND c.type = 'direct'`,
+  ).get(fpA, fpB);
+  return row ? row.conversation_id : null;
+}
+
+// ── DM Messages (conversation-based) ──────────────────────────────────────
+
+/**
+ * Inserts a new DM message into a conversation.
+ * @param {{ id: string, conversationId: string, senderFingerprint: string, content: string, keyIndex?: number, createdAt: number, replyTo?: string|null, replyToNickname?: string|null, replyToContent?: string|null }} msg
+ */
+export function insertDmMessage(msg) {
+  db.prepare(
+    `INSERT OR IGNORE INTO dm_messages (id, conversation_id, sender_fingerprint, content, key_index, created_at, reply_to, reply_to_nickname, reply_to_content)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(msg.id, msg.conversationId, msg.senderFingerprint, msg.content, msg.keyIndex ?? 0, msg.createdAt, msg.replyTo ?? null, msg.replyToNickname ?? null, msg.replyToContent ?? null);
+}
+
+/**
+ * Marks a DM message as delivered.
+ * @param {string} id
+ * @param {number} deliveredAt
+ */
+export function markDmDelivered(id, deliveredAt) {
+  db.prepare('UPDATE dm_messages SET delivered_at = ? WHERE id = ? AND delivered_at IS NULL').run(deliveredAt, id);
+}
+
+/**
+ * Returns all undelivered DM messages for a given fingerprint across all their conversations.
+ * @param {string} fingerprint
+ * @returns {Array<object>}
+ */
+export function getPendingDmMessages(fingerprint) {
+  return db.prepare(
+    `SELECT m.* FROM dm_messages m
+     JOIN conversation_participants cp ON cp.conversation_id = m.conversation_id AND cp.fingerprint = ?
+     WHERE m.sender_fingerprint != ? AND m.delivered_at IS NULL
+     ORDER BY m.created_at ASC`,
+  ).all(fingerprint, fingerprint);
+}
+
+/**
+ * Returns message history for a conversation.
+ * @param {string} conversationId
+ * @param {{ before?: number, limit?: number }} options
+ * @returns {Array<object>}
+ */
+export function getConversationMessages(conversationId, { before, limit = 50 } = {}) {
+  if (before) {
+    return db.prepare(
+      `SELECT * FROM dm_messages WHERE conversation_id = ? AND created_at < ? ORDER BY created_at DESC LIMIT ?`,
+    ).all(conversationId, before, limit);
+  }
+  return db.prepare(
+    `SELECT * FROM dm_messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT ?`,
+  ).all(conversationId, limit);
+}
+
+/**
+ * Returns pending conversation invites for a fingerprint (conversations they're in but haven't acked).
+ * Returns conversations where the user has a participant row but no messages delivered yet.
+ * @param {string} fingerprint
+ * @returns {Array<{ conversation: object, participants: Array<object>, encryptedSessionKey: string|null }>}
+ */
+export function getPendingConversationInvites(fingerprint) {
+  const rows = db.prepare(
+    `SELECT cp.conversation_id, cp.encrypted_session_key
+     FROM conversation_participants cp
+     JOIN conversations c ON c.id = cp.conversation_id
+     WHERE cp.fingerprint = ?`,
+  ).all(fingerprint);
+
+  return rows.map((row) => {
+    const conv = getConversation(row.conversation_id);
+    return {
+      ...conv,
+      encryptedSessionKey: row.encrypted_session_key,
+    };
+  });
+}
+
+/**
+ * Inserts a new friend request.
+ * @param {{ id: string, senderFingerprint: string, recipientFingerprint: string, senderPublicKey: string, senderNickname: string, createdAt: number }} req
+ */
+export function insertFriendRequest(req) {
+  db.prepare(
+    `INSERT INTO friend_requests (id, sender_fingerprint, recipient_fingerprint, sender_public_key, sender_nickname, status, created_at)
+     VALUES (@id, @senderFingerprint, @recipientFingerprint, @senderPublicKey, @senderNickname, 'pending', @createdAt)`,
+  ).run({
+    id: req.id,
+    senderFingerprint: req.senderFingerprint,
+    recipientFingerprint: req.recipientFingerprint,
+    senderPublicKey: req.senderPublicKey,
+    senderNickname: req.senderNickname,
+    createdAt: req.createdAt,
+  });
+}
+
+/**
+ * Returns a friend request by ID.
+ * @param {string} id
+ * @returns {object|undefined}
+ */
+export function getFriendRequest(id) {
+  return db.prepare('SELECT * FROM friend_requests WHERE id = ?').get(id);
+}
+
+/**
+ * Returns the pending friend request between two fingerprints in either direction.
+ * @param {string} fpA
+ * @param {string} fpB
+ * @returns {object|undefined}
+ */
+export function getPendingRequestBetween(fpA, fpB) {
+  return db.prepare(
+    `SELECT * FROM friend_requests
+     WHERE status = 'pending'
+       AND ((sender_fingerprint = ? AND recipient_fingerprint = ?)
+         OR (sender_fingerprint = ? AND recipient_fingerprint = ?))`,
+  ).get(fpA, fpB, fpB, fpA);
+}
+
+/**
+ * Returns all pending incoming friend requests for a fingerprint.
+ * @param {string} recipientFingerprint
+ * @returns {object[]}
+ */
+export function getPendingFriendRequests(recipientFingerprint) {
+  return db.prepare(
+    `SELECT * FROM friend_requests WHERE recipient_fingerprint = ? AND status = 'pending' ORDER BY created_at ASC`,
+  ).all(recipientFingerprint);
+}
+
+/**
+ * Returns accepted friend requests where the sender has not been notified yet.
+ * @param {string} senderFingerprint
+ * @returns {object[]}
+ */
+export function getUnnotifiedAcceptedRequests(senderFingerprint) {
+  return db.prepare(
+    `SELECT * FROM friend_requests WHERE sender_fingerprint = ? AND status = 'accepted' ORDER BY resolved_at ASC`,
+  ).all(senderFingerprint);
+}
+
+/**
+ * Updates a friend request's status.
+ * @param {string} id
+ * @param {string} status
+ */
+export function updateFriendRequestStatus(id, status) {
+  db.prepare('UPDATE friend_requests SET status = ?, resolved_at = ? WHERE id = ?').run(status, Date.now(), id);
+}
+
+/**
+ * Deletes a friend request by ID.
+ * @param {string} id
+ */
+export function deleteFriendRequest(id) {
+  db.prepare('DELETE FROM friend_requests WHERE id = ?').run(id);
+}
+
+/**
+ * Deletes all conversations, DM messages, and friend requests from the database.
+ * @returns {{ conversationCount: number, dmCount: number, friendRequestCount: number }}
+ */
+export function purgeAllDmAndFriendData() {
+  const dmResult = db.prepare('DELETE FROM dm_messages').run();
+  const cpResult = db.prepare('DELETE FROM conversation_participants').run();
+  const convResult = db.prepare('DELETE FROM conversations').run();
+  const frResult = db.prepare('DELETE FROM friend_requests').run();
+  return { conversationCount: convResult.changes, dmCount: dmResult.changes, friendRequestCount: frResult.changes };
 }
 
 export default db;

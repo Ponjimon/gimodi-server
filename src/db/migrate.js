@@ -4,6 +4,11 @@ import migration002 from './migrations/002-bans-nickname.js';
 import migration003 from './migrations/003-role-color.js';
 import migration004 from './migrations/004-nickname-registrations.js';
 import migration005 from './migrations/005-role-position.js';
+import migration006 from './migrations/006-drop-dm-messages.js';
+import migration007 from './migrations/007-dm-messages.js';
+import migration008 from './migrations/008-friend-requests.js';
+import migration009 from './migrations/009-dm-replies-reactions.js';
+import migration010 from './migrations/010-conversations.js';
 import logger from '../logger.js';
 
 /** @type {Array<[string, function]>} */
@@ -13,6 +18,11 @@ const MIGRATIONS = [
   ['003-role-color', migration003],
   ['004-nickname-registrations', migration004],
   ['005-role-position', migration005],
+  ['006-drop-dm-messages', migration006],
+  ['007-dm-messages', migration007],
+  ['008-friend-requests', migration008],
+  ['009-dm-replies-reactions', migration009],
+  ['010-conversations', migration010],
 ];
 
 /**

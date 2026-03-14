@@ -2,7 +2,7 @@ import { WebSocketServer } from 'ws';
 import state from '../state.js';
 import logger from '../logger.js';
 import config from '../config.js';
-import { handleConnect, handleDisconnect } from './connection.js';
+import { handleConnect, handleDisconnect, handleUpgrade } from './connection.js';
 import { handleJoinChannel, handleLeaveChannel, handleCreateChannel, handleDeleteChannel, handleUpdateChannel, handleListChannels } from './channels.js';
 import {
   handleChatSend,
@@ -11,8 +11,6 @@ import {
   handleChatDelete,
   handleChatEdit,
   handleRemovePreview,
-  handleDmSend,
-  handleDmHistory,
   handleServerChatSend,
   handleServerChatHistory,
   handleServerChatDelete,
@@ -77,8 +75,20 @@ import {
   handleAddNickname,
   handleGetAnalytics,
 } from './admin.js';
-import { handleGetUserInfo, handleGetPublicKey, handleGetNicknames } from './users.js';
+import { handleGetUserInfo, handleGetPublicKey, handleGetPublicKeys, handleGetNicknames } from './users.js';
 import { handleGetSettings, handleSetSettings } from './settings.js';
+import { handleDmSend, handleDmAck, handleDmHistory } from './dm.js';
+import {
+  handleConversationCreate,
+  handleConversationJoined,
+  handleConversationLeave,
+  handleConversationRemoveParticipant,
+  handleConversationList,
+  handleConversationKeyUpdate,
+  handleConversationAddParticipant,
+} from './conversation.js';
+import { handleFriendRequest, handleFriendAccept, handleFriendReject, handleFriendList, handleFriendRemove } from './friends.js';
+import { handlePresenceSubscribe, handlePresenceUnsubscribe } from './presence.js';
 import { incrementCounter } from '../metrics.js';
 
 let wss;
@@ -207,6 +217,8 @@ async function routeMessage(client, type, data, id) {
         return handleGetUserInfo(client, data, id);
       case 'user:get-public-key':
         return handleGetPublicKey(client, data, id);
+      case 'user:get-public-keys':
+        return handleGetPublicKeys(client, data, id);
       case 'user:get-nicknames':
         return handleGetNicknames(client, data, id);
 
@@ -222,10 +234,6 @@ async function routeMessage(client, type, data, id) {
         return handleChatEdit(client, data, id);
       case 'chat:remove-preview':
         return handleRemovePreview(client, data, id);
-      case 'chat:dm-send':
-        return handleDmSend(client, data, id);
-      case 'chat:dm-history':
-        return handleDmHistory(client, data, id);
       case 'chat:server-send':
         return handleServerChatSend(client, data, id);
       case 'chat:server-history':
@@ -364,6 +372,47 @@ async function routeMessage(client, type, data, id) {
       case 'server:set-settings':
         return handleSetSettings(client, data, id);
 
+      case 'server:upgrade':
+        return handleUpgrade(client, data, id);
+
+      case 'conversation:create':
+        return handleConversationCreate(client, data, id);
+      case 'conversation:joined':
+        return handleConversationJoined(client, data, id);
+      case 'conversation:leave':
+        return handleConversationLeave(client, data, id);
+      case 'conversation:remove-participant':
+        return handleConversationRemoveParticipant(client, data, id);
+      case 'conversation:list':
+        return handleConversationList(client, data, id);
+      case 'conversation:key-update':
+        return handleConversationKeyUpdate(client, data, id);
+      case 'conversation:add-participant':
+        return handleConversationAddParticipant(client, data, id);
+
+      case 'dm:send':
+        return handleDmSend(client, data, id);
+      case 'dm:ack':
+        return handleDmAck(client, data, id);
+      case 'dm:history':
+        return handleDmHistory(client, data, id);
+
+      case 'friend:request':
+        return handleFriendRequest(client, data, id);
+      case 'friend:accept':
+        return handleFriendAccept(client, data, id);
+      case 'friend:reject':
+        return handleFriendReject(client, data, id);
+      case 'friend:list':
+        return handleFriendList(client, data, id);
+      case 'friend:remove':
+        return handleFriendRemove(client, data, id);
+
+      case 'presence:subscribe':
+        return handlePresenceSubscribe(client, data, id);
+      case 'presence:unsubscribe':
+        return handlePresenceUnsubscribe(client, data, id);
+
       case 'server:ping':
         return;
 
@@ -409,10 +458,14 @@ export function closeWebSocket(reason) {
  * @param {string} type - Message type
  * @param {object} data - Message payload
  * @param {string} [excludeClientId] - Client ID to exclude from broadcast
+ * @param {boolean} [includeObservers=false] - Whether to also send to observe-mode clients
  */
-export function broadcast(type, data, excludeClientId) {
+export function broadcast(type, data, excludeClientId, includeObservers = false) {
   for (const client of state.clients.values()) {
     if (client.id === excludeClientId) {
+      continue;
+    }
+    if (!includeObservers && client.observe) {
       continue;
     }
     send(client.ws, type, data);
