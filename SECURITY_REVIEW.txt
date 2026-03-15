@@ -1,0 +1,164 @@
+Security review for Ponjimon/gimodi-server
+Date: 2026-03-15
+
+Summary
+- No direct SQL injection was found in the current SQLite access layer. Database queries in /src/db/database.js consistently use prepared statements with bound parameters, and the small number of dynamic SQL fragments are assembled from fixed internal column names or condition snippets rather than raw user input.
+- The repository does contain multiple other exploitable trust-boundary and access-control weaknesses.
+
+Findings
+
+1) HTTP file uploads trust only X-Client-Id and X-Channel-Id headers
+Severity: Critical
+Files:
+- /src/http/files.js:18-47
+- /src/ws/connection.js:235-260
+- /src/state.js:250-264
+
+Why this is exploitable:
+- POST /files accepts uploads when the request supplies any connected client's ID and a channel ID matching that client's current channel.
+- The handler does not require a session secret, signature, cookie, or IP match. It only performs state.clients.get(clientId) and checks client.channelId === channelId.
+- Connected clients receive the global client list in server:welcome, including each client's ID and current channelId.
+
+Impact:
+- Any authenticated WebSocket user can learn another user's clientId and then forge HTTP uploads as that user.
+- This allows impersonated uploads, storage abuse, and spoofed file messages attributed to the victim client.
+
+2) HTTP icon management trusts only X-Client-Id
+Severity: Critical
+Files:
+- /src/http/icon.js:15-25
+- /src/http/icon.js:52-103
+- /src/http/icon.js:145-161
+- /src/ws/connection.js:235-260
+- /src/state.js:250-264
+
+Why this is exploitable:
+- POST /icon and DELETE /icon authorize requests solely by looking up the supplied X-Client-Id and checking whether that in-memory client currently has server.manage_settings.
+- Client IDs are disclosed to users through the normal WebSocket welcome payload.
+- No per-session token, request signing, or source-IP binding protects the HTTP endpoint.
+
+Impact:
+- Any user who learns an admin client's ID can replace or delete the server icon through direct HTTP requests.
+- This is an authentication bypass on a privileged administrative endpoint.
+
+3) X-Forwarded-For is trusted without a proxy trust model
+Severity: High
+Files:
+- /src/ws/handler.js:115-128
+- /src/index.js:73-79
+
+Why this is exploitable:
+- WebSocket connection handling derives the client IP from X-Forwarded-For before falling back to req.socket.remoteAddress.
+- The metrics endpoint uses the same untrusted header when enforcing config.metrics.allowedNetwork.
+- There is no configuration that restricts this behavior to known reverse proxies.
+
+Impact:
+- Direct clients can spoof X-Forwarded-For to evade per-IP WebSocket limits and IP-based bans.
+- Attackers can also bypass /metrics network restrictions if they can reach the listener directly.
+
+4) Hidden-channel membership and client metadata are leaked to all clients
+Severity: High
+Files:
+- /src/ws/connection.js:250-259
+- /src/state.js:250-264
+- /src/ws/channels.js:97-118
+
+Why this is exploitable:
+- server:welcome filters the channel list by hasChannelVisibility(), but the same payload still includes state.getClientList() for every non-observer.
+- getClientList() exposes each client's channelId, nickname, userId, role metadata, mute/deafen state, and fingerprint without filtering by the recipient's channel visibility.
+
+Impact:
+- Users can infer the existence of hidden channels by observing channelId values that are absent from their own visible channel list.
+- Users can also enumerate who is present in hidden/private areas and collect their metadata.
+
+5) File browsing ignores channel visibility/read-access restrictions
+Severity: High
+Files:
+- /src/ws/chat.js:1030-1059
+- /src/db/database.js:785-800
+
+Why this is exploitable:
+- file:list only checks whether the caller has file.browse and whether the channel exists.
+- It does not reuse checkChannelChatAccess(), hasChannelReadAccess(), or channel visibility checks before returning file metadata.
+
+Impact:
+- Any role granted file.browse can enumerate filenames, sizes, uploader nicknames, timestamps, and download URLs for files in channels they should not be able to read or even know exist.
+- If the file URLs are reachable, this becomes a stepping stone to cross-channel file disclosure.
+
+6) File deletion ignores channel visibility/read-access restrictions
+Severity: High
+Files:
+- /src/ws/chat.js:1067-1115
+- /src/db/database.js:773-829
+
+Why this is exploitable:
+- file:delete only checks file.delete and the existence of a file record.
+- It does not verify that the requester can read the containing channel, belongs to it, or is otherwise authorized for that specific file.
+
+Impact:
+- Any role granted file.delete can remove arbitrary uploaded files by ID, including files attached to channels outside the caller's authorized view.
+- If file IDs are learned from file:list or chat history leakage, this becomes an easy cross-channel destructive action.
+
+7) Link preview fetching is still SSRF-prone
+Severity: Medium
+Files:
+- /src/link-preview.js:67-128
+- /src/link-preview.js:136-181
+- /src/ws/chat.js:296-324
+
+Why this is exploitable:
+- The public/private URL check is based only on the original URL string and hostname syntax.
+- It does not resolve DNS before fetching, so a public-looking hostname can still resolve to a private or loopback IP.
+- fetch() is configured with redirect: 'follow', and redirected destinations are not revalidated.
+
+Impact:
+- A user who sends a crafted message URL can cause the server to fetch internal resources, cloud metadata services, or other protected HTTP endpoints reachable from the server.
+
+8) Icon filename is path-traversal sensitive if config is attacker-controlled
+Severity: Medium
+Files:
+- /src/config.js:63-64
+- /src/ws/settings.js:47-60
+- /src/http/icon.js:30-37
+- /src/http/icon.js:110-138
+
+Why this is exploitable:
+- config.icon.filename can be sourced from the database-backed settings store or the GIMODI_ICON_FILENAME environment variable.
+- The value is later joined directly with the data directory for unlinkSync(), statSync(), and createReadStream().
+- join()/resolve() normalize paths but do not confine them to the intended base directory.
+
+Impact:
+- If an attacker gains control over icon.filename through compromised admin settings, DB tampering, or startup environment control, GET /icon can be turned into an arbitrary file read and icon deletion can delete arbitrary files.
+- This is not a low-privilege remote exploit by itself, but it expands the impact of any config compromise.
+
+9) Sensitive bootstrap/admin tokens are logged in plaintext
+Severity: Low
+Files:
+- /src/index.js:24-41
+- /README.md:12
+
+Why this is exploitable:
+- On first startup, and optionally on every startup when GIMODI_GENERATE_ADMIN_TOKEN is enabled, the server logs admin tokens directly.
+
+Impact:
+- Anyone with access to container logs, process logs, or aggregated logging backends can capture privileged bootstrap credentials.
+
+10) Transitive production dependency vulnerability in tar
+Severity: High
+Files:
+- /package-lock.json
+
+Why this is exploitable:
+- Running npm audit --omit=dev reports a high-severity vulnerability in the transitive production dependency tar (GHSA-83g3-92jg-28cx, GHSA-qffp-2rhf-9h96, GHSA-9ppj-qmqm-q256).
+- The advisory describes arbitrary file read/write and path traversal issues during archive extraction in vulnerable tar versions.
+
+Impact:
+- If any runtime path in the deployed dependency graph performs tar extraction on attacker-controlled archives, the vulnerable package version could permit filesystem escape.
+- This review did not identify an in-repo call site for tar extraction, so treat this as a dependency risk that still warrants remediation.
+
+SQL injection assessment
+- Reviewed the SQLite access layer in /src/db/database.js.
+- SELECT/INSERT/UPDATE/DELETE statements consistently use parameter binding with better-sqlite3.
+- The dynamic UPDATE builders at /src/db/database.js:255-297 and /src/db/database.js:1052-1094 only interpolate fixed column assignment fragments chosen by server-side code, not raw client input.
+- The conditional delete helper at /src/db/database.js:702-727 builds SQL from fixed "client_id = ?" / "user_id = ?" fragments and still binds all values as parameters.
+- Conclusion: no direct SQL injection was identified in the current repository state.
