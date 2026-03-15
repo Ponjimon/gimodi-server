@@ -143,6 +143,19 @@ Why this is exploitable:
 Impact:
 - Anyone with access to container logs, process logs, or aggregated logging backends can capture privileged bootstrap credentials.
 
+10) Transitive production dependency vulnerability in tar
+Severity: High
+Files:
+- /package-lock.json
+
+Why this is exploitable:
+- Running npm audit --omit=dev reports a high-severity vulnerability in the transitive production dependency tar (GHSA-83g3-92jg-28cx, GHSA-qffp-2rhf-9h96, GHSA-9ppj-qmqm-q256).
+- The advisory describes arbitrary file read/write and path traversal issues during archive extraction in vulnerable tar versions.
+
+Impact:
+- If any runtime path in the deployed dependency graph performs tar extraction on attacker-controlled archives, the vulnerable package version could permit filesystem escape.
+- This review did not identify an in-repo call site for tar extraction, so treat this as a dependency risk that still warrants remediation.
+
 SQL injection assessment
 - Reviewed the SQLite access layer in /src/db/database.js.
 - SELECT/INSERT/UPDATE/DELETE statements consistently use parameter binding with better-sqlite3.
